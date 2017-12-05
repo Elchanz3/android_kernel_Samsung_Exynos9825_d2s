@@ -97,10 +97,7 @@ of_cpufreq_cooling_register(struct device_node *np,
 			    struct cpufreq_policy *policy);
 
 struct thermal_cooling_device *
-of_cpufreq_power_cooling_register(struct device_node *np,
-				  struct cpufreq_policy *policy,
-				  u32 capacitance,
-				  get_static_t plat_static_func);
+of_cpufreq_power_cooling_register(struct cpufreq_policy *policy);
 
 struct thermal_cooling_device *
 exynos_cpufreq_cooling_register(struct device_node *np, struct cpufreq_policy *policy);
@@ -114,10 +111,7 @@ of_cpufreq_cooling_register(struct device_node *np,
 }
 
 static inline struct thermal_cooling_device *
-of_cpufreq_power_cooling_register(struct device_node *np,
-				  struct cpufreq_policy *policy,
-				  u32 capacitance,
-				  get_static_t plat_static_func)
+of_cpufreq_power_cooling_register(struct cpufreq_policy *policy)
 {
 	return NULL;
 }
@@ -157,10 +151,7 @@ of_cpufreq_cooling_register(struct device_node *np,
 }
 
 static inline struct thermal_cooling_device *
-of_cpufreq_power_cooling_register(struct device_node *np,
-				  struct cpufreq_policy *policy,
-				  u32 capacitance,
-				  get_static_t plat_static_func)
+of_cpufreq_power_cooling_register(struct cpufreq_policy *policy)
 {
 	return NULL;
 }
