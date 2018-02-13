@@ -12,7 +12,7 @@ export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
 BUILD_CROSS_COMPILE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
-KERNEL_LLVM_BIN=/home/chanz22/Downloads/Clang-17.0.0-20230506/bin/clang
+KERNEL_LLVM_BIN=/home/chanz22/Downloads/Clang-17.0.0-20230510/bin/clang
 CLANG_TRIPLE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
 
 DATE_START=$(date +"%s")
