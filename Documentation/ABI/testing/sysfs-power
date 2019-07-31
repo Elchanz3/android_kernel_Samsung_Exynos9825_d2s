@@ -286,6 +286,9 @@ Description:
 		writing a "0" (default) to it disables them.  Reads from
 		this file return the current value.
 
+		Using this sysfs file will override any values that were
+		set using the kernel command line for disk offset.
+
 What:		/sys/power/suspend_stats
 Date:		July 2019
 Contact:	Kalesh Singh <kaleshsingh96@gmail.com>
@@ -390,4 +393,5 @@ Date:		July 2019
 Contact:	Kalesh Singh <kaleshsingh96@gmail.com>
 Description:
 		The /sys/power/suspend_stats/last_failed_step file contains
+
 		the last failed step in the suspend/resume path.
