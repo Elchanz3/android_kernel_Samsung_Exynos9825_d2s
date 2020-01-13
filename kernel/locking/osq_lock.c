@@ -145,7 +145,8 @@ bool osq_lock(struct optimistic_spin_queue *lock)
 				  vcpu_is_preempted(node_cpu(node->prev))))
 		return true;
 
-    /* unqueue: */
+	/* unqueue */
+
 	/*
 	 * Step - A  -- stabilize @prev
 	 *
