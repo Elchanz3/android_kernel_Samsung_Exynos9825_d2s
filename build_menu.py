@@ -13,7 +13,7 @@ def compile_kernel():
     CHIPSET_NAME = 'universal9820'
     VARIANT = 'd2s'
     ARCH = 'arm64'
-    VERSION = f'WeiboKernel_{VARIANT}_v0.8.1'
+    VERSION = f'WeiboKernel_{VARIANT}_v0.8.2'
     LOG_FILE = 'compilation.log'
     
     # Create the necessary folders
@@ -25,9 +25,9 @@ def compile_kernel():
     ANDROID_MAJOR_VERSION = 't'
     SEC_BUILD_CONF_VENDOR_BUILD_OS = '13'
     
-    BUILD_CROSS_COMPILE = '/home/chanz22/toolchain/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-'
-    KERNEL_LLVM_BIN = '/home/chanz22/toolchain/Clang-18.0.0-20230914/bin/clang'
-    CLANG_TRIPLE = '/home/chanz22/toolchain/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-'
+    BUILD_CROSS_COMPILE = '/home/chanz22/toolchains/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-'
+    KERNEL_LLVM_BIN = '/home/chanz22/toolchains/Clang-18.0.0-20231004/bin/clang'
+    CLANG_TRIPLE = '/home/chanz22/toolchains/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-'
     
     DATE_START = os.popen("date +'%s'").read().strip()
     
