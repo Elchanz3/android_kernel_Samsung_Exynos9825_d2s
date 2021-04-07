@@ -58,6 +58,8 @@ obj-$(CONFIG_ASPEED_LPC_SNOOP)	+= aspeed-lpc-snoop.o
 obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
 
 obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
+obj-$(CONFIG_EXYNOS_PASR)	+= exynos_pasr.o
+obj-$(CONFIG_BATTERY_SAVER)	+= battery_saver.o
 obj-$(CONFIG_MCU_IPC)           += mcu_ipc/
 obj-$(CONFIG_SEC_SIPC_MODEM_IF) += modem_v1/
 obj-$(CONFIG_SEC_SIPC_DUAL_MODEM_IF) += modem_v1_dual/
