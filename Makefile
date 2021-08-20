@@ -677,6 +677,10 @@ else
 include/config/auto.conf: ;
 endif # $(dot-config)
 
+ifdef CONFIG_CC_WERROR
+  KBUILD_CFLAGS += -Werror
+endif
+
 # For the kernel to actually contain only the needed exported symbols,
 # we have to build modules as well to determine what those symbols are.
 # (this can be evaluated only once include/config/auto.conf has been included)
@@ -1204,7 +1208,7 @@ $(vmlinux-dirs): prepare scripts
 	$(Q)$(MAKE) $(build)=$@
 
 define filechk_kernel.release
-	echo "$(KERNELVERSION)$$($(CONFIG_SHELL) $(srctree)/scripts/setlocalversion $(srctree))"
+	echo "$(KERNELVERSION)$$($(CONFIG_SHELL) $(srctree)/scripts/setlocalversion $(srctree))-NobodyKernel_v1.0"
 endef
 
 # Store (new) KERNELRELEASE string in include/config/kernel.release
