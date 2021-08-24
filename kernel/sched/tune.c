@@ -466,6 +466,8 @@ int schedtune_prefer_idle(struct task_struct *p)
 
 	if (!unlikely(schedtune_initialized) || is_battery_saver_on())
 
+		return 0;
+
 	/* Get prefer_idle value */
 	rcu_read_lock();
 	st = task_schedtune(p);
@@ -556,6 +558,9 @@ prefer_idle_read(struct cgroup_subsys_state *css, struct cftype *cft)
 {
 	struct schedtune *st = css_st(css);
 
+	if (is_battery_saver_on())
+		return 0;
+
 	return st->prefer_idle;
 }
 
@@ -576,6 +581,9 @@ prefer_perf_read(struct cgroup_subsys_state *css, struct cftype *cft)
 	
 	 if (is_battery_saver_on())
 		   return 0;
+
+	if (is_battery_saver_on())
+		return 0;
 
 	return st->prefer_perf;
 }
