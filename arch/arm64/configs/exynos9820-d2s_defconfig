@@ -7,6 +7,9 @@ CONFIG_LITTLE_CPU_MASK=15
 CONFIG_BIG_CPU_MASK=48
 CONFIG_PRIME_CPU_MASK=192
 
+## CFS_BANDWITH - can makes too much cpu's thrrottling
+# CONFIG_CFS_BANDWIDTH is not set
+
 
 
 
