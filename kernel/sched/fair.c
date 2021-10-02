@@ -7921,8 +7921,65 @@ static inline int wake_energy(struct task_struct *p, int prev_cpu,
 	if (!energy_aware())
 		return false;
 
-	if (sd_overutilized(sd))
-		return false;
+
+	/* Pre-select a set of candidate CPUs. */
+	candidates = this_cpu_ptr(&energy_cpus);
+	cpumask_clear(candidates);
+
+	if (sched_feat(FIND_BEST_TARGET))
+		find_best_target(sd, candidates, p);
+	else
+		select_cpu_candidates(sd, candidates, pd, p, prev_cpu);
+
+	/* Bail out if no candidate was found. */
+	weight = cpumask_weight(candidates);
+	if (!weight) {
+		/*
+		 * Don't overload the previous CPU if it had already
+		 * more runnable tasks. Fallback to a CPU with lower
+		 * number of tasks.
+		 */
+		if (cpu_rq(prev_cpu)->nr_running > 32) {
+			int i;
+			unsigned int best_nr = UINT_MAX;
+
+			for_each_cpu(i, cpu_active_mask) {
+				if (!cpumask_test_cpu(i, &p->cpus_allowed))
+					continue;
+				if (cpu_rq(i)->nr_running < best_nr) {
+					best_nr = cpu_rq(i)->nr_running;
+					best_energy_cpu = i;
+				}
+			}
+		}
+		goto unlock;
+    }
+
+	/* If there is only one sensible candidate, select it now. */
+	cpu = cpumask_first(candidates);
+	if (weight == 1 && ((schedtune_prefer_idle(p) && idle_cpu(cpu)) ||
+			    (cpu == prev_cpu))) {
+		best_energy_cpu = cpu;
+		goto unlock;
+	}
+
+	if (cpumask_test_cpu(prev_cpu, &p->cpus_allowed))
+		prev_energy = best_energy = compute_energy(p, prev_cpu, pd);
+	else
+		prev_energy = best_energy = ULONG_MAX;
+
+	/* Select the best candidate energy-wise. */
+	for_each_cpu(cpu, candidates) {
+		if (cpu == prev_cpu)
+			continue;
+		cur_energy = compute_energy(p, cpu, pd);
+		if (cur_energy < best_energy) {
+			best_energy = cur_energy;
+			best_energy_cpu = cpu;
+		}
+	}
+unlock:
+	rcu_read_unlock();
 
 	/*
 	 * we cannot do energy-aware wakeup placement sensibly
