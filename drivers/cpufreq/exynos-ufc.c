@@ -7,6 +7,13 @@
  *
  * Exynos ACME(A Cpufreq that Meets Every chipset) driver implementation
  */
+#define pr_fmt(fmt)	KBUILD_MODNAME ": " fmt
+
+/*
+ * Log2 of the number of scale size. The frequencies are scaled up or
+ * down as the multiple of this number. Default is 8.
+ */
+#define SCALE_SIZE 2
 
 #define pr_fmt(fmt)	KBUILD_MODNAME ": " fmt
 
