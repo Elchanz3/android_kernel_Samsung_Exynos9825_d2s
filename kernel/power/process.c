@@ -29,7 +29,9 @@
 /*
  * Timeout for stopping processes
  */
-unsigned int __read_mostly freeze_timeout_msecs = 5 * MSEC_PER_SEC;    // 10
+
+unsigned int __read_mostly freeze_timeout_msecs =
+	IS_ENABLED(CONFIG_ANDROID) ? MSEC_PER_SEC : 20 * MSEC_PER_SEC; //5
 
 static int try_to_freeze_tasks(bool user_only)
 {
