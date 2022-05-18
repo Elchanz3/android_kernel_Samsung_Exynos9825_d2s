@@ -127,6 +127,9 @@ struct cpufreq_policy {
 	 */
 	unsigned int		transition_delay_us;
 
+	/* Boost switch for tasks with p->in_iowait set */
+	bool            iowait_boost_enable;
+
 	/*
 	 * Preferred average time interval between consecutive invocations of
 	 * the driver to set the frequency for this policy.  To be set by the
