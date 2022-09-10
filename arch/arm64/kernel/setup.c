@@ -290,7 +290,25 @@ void __init setup_arch(char **cmdline_p)
 {
 	pr_info("Boot CPU: AArch64 Processor [%08x]\n", read_cpuid_id());
 
-	sprintf(init_utsname()->machine, UTS_MACHINE);
+
+static int __init androidboot_startupmode(char *p)
+{
+	char *offset_addr;
+
+	if (strcmp(p, "usb_charger"))
+		return 1;
+
+	if ((offset_addr =
+		     strstr(boot_command_line, "androidboot.mode=normal")))
+		memset(offset_addr, ' ', sizeof("androidboot.mode=normal"));
+
+	return 0;
+}
+early_param("androidboot.startupmode", androidboot_startupmode);
+
+void __init __no_sanitize_address setup_arch(char **cmdline_p)
+{
+
 	init_mm.start_code = (unsigned long) _text;
 	init_mm.end_code   = (unsigned long) _etext;
 	init_mm.end_data   = (unsigned long) _edata;
