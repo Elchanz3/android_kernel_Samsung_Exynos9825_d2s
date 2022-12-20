@@ -191,6 +191,251 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 		drop_rmap_locks(vma);
 }
 
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+static inline bool trylock_vma_ref_count(struct vm_area_struct *vma)
+{
+	/*
+	 * If we have the only reference, swap the refcount to -1. This
+	 * will prevent other concurrent references by get_vma() for SPFs.
+	 */
+	return atomic_cmpxchg(&vma->vm_ref_count, 1, -1) == 1;
+}
+
+/*
+ * Restore the VMA reference count to 1 after a fast mremap.
+ */
+static inline void unlock_vma_ref_count(struct vm_area_struct *vma)
+{
+	/*
+	 * This should only be called after a corresponding,
+	 * successful trylock_vma_ref_count().
+	 */
+	VM_BUG_ON_VMA(atomic_cmpxchg(&vma->vm_ref_count, -1, 1) != -1,
+		      vma);
+}
+#else	/* !CONFIG_SPECULATIVE_PAGE_FAULT */
+static inline bool trylock_vma_ref_count(struct vm_area_struct *vma)
+{
+	return true;
+}
+static inline void unlock_vma_ref_count(struct vm_area_struct *vma)
+{
+}
+#endif	/* CONFIG_SPECULATIVE_PAGE_FAULT */
+
+#ifdef CONFIG_HAVE_MOVE_PMD
+static bool move_normal_pmd(struct vm_area_struct *vma, unsigned long old_addr,
+		  unsigned long new_addr, pmd_t *old_pmd, pmd_t *new_pmd)
+{
+	spinlock_t *old_ptl, *new_ptl;
+	struct mm_struct *mm = vma->vm_mm;
+	pmd_t pmd;
+
+	/*
+	 * The destination pmd shouldn't be established, free_pgtables()
+	 * should have released it.
+	 *
+	 * However, there's a case during execve() where we use mremap
+	 * to move the initial stack, and in that case the target area
+	 * may overlap the source area (always moving down).
+	 *
+	 * If everything is PMD-aligned, that works fine, as moving
+	 * each pmd down will clear the source pmd. But if we first
+	 * have a few 4kB-only pages that get moved down, and then
+	 * hit the "now the rest is PMD-aligned, let's do everything
+	 * one pmd at a time", we will still have the old (now empty
+	 * of any 4kB pages, but still there) PMD in the page table
+	 * tree.
+	 *
+	 * Warn on it once - because we really should try to figure
+	 * out how to do this better - but then say "I won't move
+	 * this pmd".
+	 *
+	 * One alternative might be to just unmap the target pmd at
+	 * this point, and verify that it really is empty. We'll see.
+	 */
+	if (WARN_ON_ONCE(!pmd_none(*new_pmd)))
+		return false;
+
+	/*
+	 * We hold both exclusive mmap_lock and rmap_lock at this point and
+	 * cannot block. If we cannot immediately take exclusive ownership
+	 * of the VMA fallback to the move_ptes().
+	 */
+	if (!trylock_vma_ref_count(vma))
+		return false;
+
+	/*
+	 * We don't have to worry about the ordering of src and dst
+	 * ptlocks because exclusive mmap_lock prevents deadlock.
+	 */
+	old_ptl = pmd_lock(vma->vm_mm, old_pmd);
+	new_ptl = pmd_lockptr(mm, new_pmd);
+	if (new_ptl != old_ptl)
+		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
+
+	/* Clear the pmd */
+	pmd = *old_pmd;
+	pmd_clear(old_pmd);
+
+	VM_BUG_ON(!pmd_none(*new_pmd));
+
+	/* Set the new pmd */
+	set_pmd_at(mm, new_addr, new_pmd, pmd);
+	flush_tlb_range(vma, old_addr, old_addr + PMD_SIZE);
+	if (new_ptl != old_ptl)
+		spin_unlock(new_ptl);
+	spin_unlock(old_ptl);
+
+	unlock_vma_ref_count(vma);
+	return true;
+}
+#else
+static inline bool move_normal_pmd(struct vm_area_struct *vma,
+		unsigned long old_addr, unsigned long new_addr, pmd_t *old_pmd,
+		pmd_t *new_pmd)
+{
+	return false;
+}
+#endif
+
+#ifdef CONFIG_HAVE_MOVE_PUD
+static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
+		  unsigned long new_addr, pud_t *old_pud, pud_t *new_pud)
+{
+	spinlock_t *old_ptl, *new_ptl;
+	struct mm_struct *mm = vma->vm_mm;
+	pud_t pud;
+
+	/*
+	 * The destination pud shouldn't be established, free_pgtables()
+	 * should have released it.
+	 */
+	if (WARN_ON_ONCE(!pud_none(*new_pud)))
+		return false;
+
+	/*
+	 * We hold both exclusive mmap_lock and rmap_lock at this point and
+	 * cannot block. If we cannot immediately take exclusive ownership
+	 * of the VMA fallback to the move_ptes().
+	 */
+	if (!trylock_vma_ref_count(vma))
+		return false;
+
+	/*
+	 * We don't have to worry about the ordering of src and dst
+	 * ptlocks because exclusive mmap_lock prevents deadlock.
+	 */
+	old_ptl = pud_lock(vma->vm_mm, old_pud);
+	new_ptl = pud_lockptr(mm, new_pud);
+	if (new_ptl != old_ptl)
+		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
+
+	/* Clear the pud */
+	pud = *old_pud;
+	pud_clear(old_pud);
+
+	VM_BUG_ON(!pud_none(*new_pud));
+
+	/* Set the new pud */
+	set_pud_at(mm, new_addr, new_pud, pud);
+	flush_tlb_range(vma, old_addr, old_addr + PUD_SIZE);
+	if (new_ptl != old_ptl)
+		spin_unlock(new_ptl);
+	spin_unlock(old_ptl);
+
+	unlock_vma_ref_count(vma);
+	return true;
+}
+#else
+static inline bool move_normal_pud(struct vm_area_struct *vma,
+		unsigned long old_addr, unsigned long new_addr, pud_t *old_pud,
+		pud_t *new_pud)
+{
+	return false;
+}
+#endif
+
+enum pgt_entry {
+	NORMAL_PMD,
+	HPAGE_PMD,
+	NORMAL_PUD,
+};
+
+/*
+ * Returns an extent of the corresponding size for the pgt_entry specified if
+ * valid. Else returns a smaller extent bounded by the end of the source and
+ * destination pgt_entry.
+ */
+static unsigned long get_extent(enum pgt_entry entry, unsigned long old_addr,
+			unsigned long old_end, unsigned long new_addr)
+{
+	unsigned long next, extent, mask, size;
+
+	switch (entry) {
+	case HPAGE_PMD:
+	case NORMAL_PMD:
+		mask = PMD_MASK;
+		size = PMD_SIZE;
+		break;
+	case NORMAL_PUD:
+		mask = PUD_MASK;
+		size = PUD_SIZE;
+		break;
+	default:
+		BUILD_BUG();
+		break;
+	}
+
+	next = (old_addr + size) & mask;
+	/* even if next overflowed, extent below will be ok */
+	extent = next - old_addr;
+	if (extent > old_end - old_addr)
+		extent = old_end - old_addr;
+	next = (new_addr + size) & mask;
+	if (extent > next - new_addr)
+		extent = next - new_addr;
+	return extent;
+}
+
+/*
+ * Attempts to speedup the move by moving entry at the level corresponding to
+ * pgt_entry. Returns true if the move was successful, else false.
+ */
+static bool move_pgt_entry(enum pgt_entry entry, struct vm_area_struct *vma,
+			unsigned long old_addr, unsigned long new_addr,
+			void *old_entry, void *new_entry, bool need_rmap_locks)
+{
+	bool moved = false;
+
+	/* See comment in move_ptes() */
+	if (need_rmap_locks)
+		take_rmap_locks(vma);
+
+	switch (entry) {
+	case NORMAL_PMD:
+		moved = move_normal_pmd(vma, old_addr, new_addr, old_entry,
+					new_entry);
+		break;
+	case NORMAL_PUD:
+		moved = move_normal_pud(vma, old_addr, new_addr, old_entry,
+					new_entry);
+		break;
+	case HPAGE_PMD:
+		moved = IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE) &&
+			move_huge_pmd(vma, old_addr, new_addr, old_entry,
+				      new_entry);
+		break;
+	default:
+		WARN_ON_ONCE(1);
+		break;
+	}
+
+	if (need_rmap_locks)
+		drop_rmap_locks(vma);
+
+	return moved;
+}
 
 unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
