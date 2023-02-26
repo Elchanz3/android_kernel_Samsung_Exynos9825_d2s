@@ -4997,7 +4997,6 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 		    ino != EXT4_BOOT_LOADER_INO) {
 			/* this inode is deleted */
 			ret = -ESTALE;
-			print_iloc_info(sb, iloc);
 			goto bad_inode;
 		}
 		/* The only unlinked inodes we let through here have
@@ -5122,7 +5121,6 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 		}
 	}
 	if (ret) {
-		print_iloc_info(sb, iloc);
 		goto bad_inode;
 	}
 

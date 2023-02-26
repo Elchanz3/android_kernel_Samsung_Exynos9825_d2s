@@ -62,7 +62,7 @@
 #include "xattr.h"
 #include "acl.h"
 
-#ifdef EXT4_XATTR_DEBUG
+#if 0
 # define ea_idebug(inode, fmt, ...)					\
 	printk(KERN_DEBUG "inode %s:%lu: " fmt "\n",			\
 	       inode->i_sb->s_id, inode->i_ino, ##__VA_ARGS__)
@@ -245,7 +245,6 @@ __ext4_xattr_check_block(struct inode *inode, struct buffer_head *bh,
 					 bh->b_data);
 errout:
 	if (error) {
-		print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
 		__ext4_error_inode(inode, function, line, 0,
 				   "corrupted xattr block %llu",
 				   (unsigned long long) bh->b_blocknr);
@@ -602,7 +601,6 @@ ext4_xattr_ibody_get(struct inode *inode, int name_index, const char *name,
 	if (error) {
 		__ext4_error_inode(inode, __func__, __LINE__, 0,
 				   "corrupted in-inode xattr");
-		print_iloc_info(inode->i_sb, iloc);
 		goto cleanup;
 	}
 	entry = IFIRST(header);
@@ -749,7 +747,6 @@ ext4_xattr_ibody_list(struct dentry *dentry, char *buffer, size_t buffer_size)
 	end = (void *)raw_inode + EXT4_SB(inode->i_sb)->s_inode_size;
 	error = xattr_check_inode(inode, header, end);
 	if (error) {
-		print_iloc_info(inode->i_sb, iloc);
 		__ext4_error_inode(inode, __func__, __LINE__, 0,
 				   "corrupted in-inode xattr");
 		goto cleanup;
@@ -835,7 +832,6 @@ int ext4_get_inode_usage(struct inode *inode, qsize_t *usage)
 		end = (void *)raw_inode + EXT4_SB(inode->i_sb)->s_inode_size;
 		ret = xattr_check_inode(inode, header, end);
 		if (ret) {
-			print_iloc_info(inode->i_sb, iloc);
 			__ext4_error_inode(inode, __func__, __LINE__, 0,
 					   "corrupted in-inode xattr");
 			goto out;
@@ -2232,7 +2228,6 @@ int ext4_xattr_ibody_find(struct inode *inode, struct ext4_xattr_info *i,
 	if (ext4_test_inode_state(inode, EXT4_STATE_XATTR)) {
 		error = xattr_check_inode(inode, header, is->s.end);
 		if (error) {
-			print_iloc_info(inode->i_sb, is->iloc);
 			__ext4_error_inode(inode, __func__, __LINE__, 0,
 					   "corrupted in-inode xattr");
 			return error;
@@ -2765,8 +2760,6 @@ retry:
 	error = xattr_check_inode(inode, header, end);
 	if (error) {
 		printk(KERN_ERR "printing inode..\n");
-		print_block_data(inode->i_sb, 0, (unsigned char *)raw_inode,
-					0, EXT4_INODE_SIZE(inode->i_sb));
 		__ext4_error_inode(inode, __func__, __LINE__, 0,
 				   "corrupted in-inode xattr");
 		goto cleanup;
