@@ -322,20 +322,10 @@ int kbase_device_init(struct kbase_device *kbdev)
 	}
 	
 	kthread_init_worker(&kbdev->job_done_worker);
-	kbdev->job_done_worker_thread = kthread_run(kthread_worker_fn,
-		&kbdev->job_done_worker, "mali_jd_thread");
-	if (IS_ERR(kbdev->job_done_worker_thread)) {
-		err = -ENOMEM;
-		return err;
-	}
-
-	if (sched_setscheduler(kbdev->job_done_worker_thread,
-				SCHED_FIFO, &param)) {
-		dev_warn(kbdev->dev, "mali_jd_thread not set to RT prio");
-	} else {
-		dev_info(kbdev->dev, "mali_jd_thread set to RT prio: %i",
-			 MALI_JD_THREAD_RT_PRIORITY);
-	}
+	kbdev->job_done_worker_thread = kbase_create_realtime_thread(kbdev,
+		kthread_worker_fn, &kbdev->job_done_worker, "mali_jd_thread");
+	if (IS_ERR(kbdev->job_done_worker_thread))
+		return PTR_ERR(kbdev->job_done_worker_thread);
 
 	err = kbase_pm_apc_init(kbdev);
 	if (err)
