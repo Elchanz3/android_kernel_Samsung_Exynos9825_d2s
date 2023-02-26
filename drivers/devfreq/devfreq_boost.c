@@ -12,6 +12,7 @@
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
+#include <linux/moduleparam.h>
 
 static unsigned long devfreq_boost_freq =
 	CONFIG_DEVFREQ_EXYNOS_MIF_BOOST_FREQ;
@@ -42,6 +43,9 @@ struct df_boost_drv {
 	struct notifier_block fb_notif;
 };
 
+static int devfreq_boost = 0;
+module_param(devfreq_boost, int, 0644);
+
 static void devfreq_device_unboost(struct work_struct *work);
 static void devfreq_max_unboost(struct work_struct *work);
 
@@ -64,6 +68,9 @@ static struct df_boost_drv df_boost_drv_g __read_mostly = {
 
 static void __devfreq_boost_kick(struct boost_dev *b)
 {
+	if (!devfreq_boost)
+		return;
+
 	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state))
 		return;
 
@@ -87,6 +94,9 @@ static void __devfreq_boost_kick_max(struct boost_dev *b,
 				     unsigned int duration_ms)
 {
 	unsigned long boost_jiffies, curr_expires, new_expires;
+
+	if (!devfreq_boost)
+		return;
 
 	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state))
 		return;
