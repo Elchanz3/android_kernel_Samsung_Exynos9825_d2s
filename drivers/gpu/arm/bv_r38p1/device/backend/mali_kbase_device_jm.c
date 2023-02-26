@@ -292,6 +292,7 @@ static void kbase_device_term_partial(struct kbase_device *kbdev,
 
 void kbase_device_term(struct kbase_device *kbdev)
 {
+	kbase_pm_apc_term(kbdev);
 	kbase_device_term_partial(kbdev, ARRAY_SIZE(dev_init));
 	kbasep_js_devdata_halt(kbdev);
 	kbase_mem_halt(kbdev);
@@ -318,6 +319,33 @@ int kbase_device_init(struct kbase_device *kbdev)
 				break;
 			}
 		}
+	}
+
+	kthread_init_worker(&kbdev->job_done_worker);
+	kbdev->job_done_worker_thread = kthread_run(kthread_worker_fn,
+		&kbdev->job_done_worker, "mali_jd_thread");
+	if (IS_ERR(kbdev->job_done_worker_thread)) {
+		err = -ENOMEM;
+		return err;
+	}
+
+	if (sched_setscheduler(kbdev->job_done_worker_thread,
+				SCHED_FIFO, &param)) {
+		dev_warn(kbdev->dev, "mali_jd_thread not set to RT prio");
+	} else {
+		dev_info(kbdev->dev, "mali_jd_thread set to RT prio: %i",
+			 MALI_JD_THREAD_RT_PRIORITY);
+	}
+
+	err = kbase_pm_apc_init(kbdev);
+	if (err)
+		return err;
+
+	kthread_init_worker(&kbdev->event_worker);
+	kbdev->event_worker_thread = kthread_run(kthread_worker_fn,
+		&kbdev->event_worker, "mali_event_thread");
+	if (IS_ERR(kbdev->event_worker_thread)) {
+		err = -ENOMEM;
 	}
 
 	return err;
