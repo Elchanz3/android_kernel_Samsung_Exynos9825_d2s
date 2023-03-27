@@ -209,7 +209,6 @@ union kbase_pm_policy_data {
 	struct kbasep_pm_policy_coarse_demand coarse_demand;
 	struct kbasep_pm_policy_adaptive adaptive;
 };
-};
 
 /**
  * struct kbase_pm_backend_data - Data stored per device for power management.
