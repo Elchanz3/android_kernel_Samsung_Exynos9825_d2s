@@ -1390,7 +1390,7 @@ static __init int cpufreq_read_cpu_min_cl2(char *cpu_min_cl2)
 __setup("cpu_min_cl2=", cpufreq_read_cpu_min_cl2);
 
 
-static unsigned long arg_cpu_max_cl0 = 2106000; /* max cpu freq 2106MHz */
+static unsigned long arg_cpu_max_cl0 = 2116000; /* max cpu freq 2116MHz */
 
 static int __init cpufreq_read_cpu_max_cl0(char *cpu_max_cl0)
 {
