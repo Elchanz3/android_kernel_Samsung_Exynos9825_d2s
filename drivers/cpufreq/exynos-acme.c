@@ -994,7 +994,7 @@ __ATTR(freqvar_idlelatency, S_IRUGO | S_IWUSR,
  *                  INITIALIZE EXYNOS CPUFREQ DRIVER                 *
  *********************************************************************/
 
-static int cpu_undervolt = 25000;
+static int cpu_undervolt = 45000;
 
 static void print_domain_info(struct exynos_cpufreq_domain *domain)
 {
