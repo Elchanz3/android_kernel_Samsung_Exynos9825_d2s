@@ -1224,7 +1224,7 @@ void *memchr_inv(const void *start, int c, size_t bytes)
 		return check_bytes8(start, value, bytes);
 
 	value64 = value;
-	MEMCHR_MASK_GEN(value64)
+	MEMCHR_MASK_GEN(value64);
 
 	prefix = (unsigned long)start % 8;
 	if (prefix) {
