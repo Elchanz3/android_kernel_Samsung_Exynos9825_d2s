@@ -1053,6 +1053,38 @@ void *memchr(const void *s, int c, size_t n)
 		}
 	}
 	return NULL;
+}/**
+ * memchr - Find a character in an area of memory.
+ * @p: The memory area
+ * @c: The byte to search for
+ * @length: The size of the area.
+ *
+ * returns the address of the first occurrence of @c, or %NULL
+ * if @c is not found
+ */
+void *memchr(const void *p, int c, unsigned long length)
+{
+	u64 mask, val;
+	const void *end = p + length;
+
+	c &= 0xff;
+	if (p <= end - 8) {
+		mask = c;
+		MEMCHR_MASK_GEN(mask);
+
+		for (; p <= end - 8; p += 8) {
+			val = *(u64 *)p ^ mask;
+			if ((val + 0xfefefefefefefeffu) &
+			    (~val & 0x8080808080808080u))
+				break;
+		}
+	}
+
+	for (; p < end; p++)
+		if (*(unsigned char *)p == c)
+			return (void *)p;
+
+	return NULL;
 }
 EXPORT_SYMBOL(memchr);
 #endif
