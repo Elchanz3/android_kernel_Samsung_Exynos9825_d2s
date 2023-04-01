@@ -28,27 +28,9 @@
 #include <linux/bug.h>
 #include <linux/errno.h>
 
-#include <asm/unaligned.h>
 #include <asm/byteorder.h>
 #include <asm/word-at-a-time.h>
 #include <asm/page.h>
-
-#define BYTES_LONG	sizeof(long)
-#define WORD_MASK	(BYTES_LONG - 1)
-#define MIN_THRESHOLD	(BYTES_LONG * 2)
-
-/* convenience union to avoid cast between different pointer types */
-union types {
-	u8 *as_u8;
-	unsigned long *as_ulong;
-	uintptr_t as_uptr;
-};
-
-union const_types {
-	const u8 *as_u8;
-	const unsigned long *as_ulong;
-	uintptr_t as_uptr;
-};
 
 #ifndef __HAVE_ARCH_STRNCASECMP
 /**
@@ -866,13 +848,6 @@ EXPORT_SYMBOL(memset64);
 #endif
 
 #ifndef __HAVE_ARCH_MEMCPY
-
-#ifdef __BIG_ENDIAN
-#define MERGE_UL(h, l, d) ((h) << ((d) * 8) | (l) >> ((BYTES_LONG - (d)) * 8))
-#else
-#define MERGE_UL(h, l, d) ((h) >> ((d) * 8) | (l) << ((BYTES_LONG - (d)) * 8))
-#endif
-
 /**
  * memcpy - Copy one area of memory to another
  * @dest: Where to copy to
@@ -890,65 +865,7 @@ void *memcpy(void *dest, const void *src, size_t count)
 	while (count--)
 		*tmp++ = *s++;
 	return dest;
-}union const_types s = { .as_u8 = src };
-	union types d = { .as_u8 = dest };
-	int distance = 0;
-
-	if (!IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS)) {
-		if (count < MIN_THRESHOLD)
-			goto copy_remainder;
-
-		/* Copy a byte at time until destination is aligned. */
-		for (; d.as_uptr & WORD_MASK; count--)
-			*d.as_u8++ = *s.as_u8++;
-
-		distance = s.as_uptr & WORD_MASK;
-	}
-
-	if (distance) {
-		unsigned long last, next;
-
-		/*
-		 * s is distance bytes ahead of d, and d just reached
-		 * the alignment boundary. Move s backward to word align it
-		 * and shift data to compensate for distance, in order to do
-		 * word-by-word copy.
-		 */
-		s.as_u8 -= distance;
-
-		next = s.as_ulong[0];
-		for (; count >= BYTES_LONG; count -= BYTES_LONG) {
-			last = next;
-			next = s.as_ulong[1];
-
-			d.as_ulong[0] = MERGE_UL(last, next, distance);
-
-			d.as_ulong++;
-			s.as_ulong++;
-		}
-
-		/* Restore s with the original offset. */
-		s.as_u8 += distance;
-	} else {
-		/*
-		 * If the source and dest lower bits are the same, do a simple
-		 * 32/64 bit wide copy.
-		 */
-		for (; count >= BYTES_LONG; count -= BYTES_LONG)
-			*d.as_ulong++ = *s.as_ulong++;
-	}
-
-copy_remainder:
-        while (count--)
-		*d.as_u8++ = *s.as_u8++;
-
-	return dest;
 }
-EXPORT_SYMBOL(memcpy);
-
-#undef MERGE_UL
-
-
 EXPORT_SYMBOL(memcpy);
 #endif
 
@@ -996,22 +913,6 @@ __visible int memcmp(const void *cs, const void *ct, size_t count)
 {
 	const unsigned char *su1, *su2;
 	int res = 0;
-	
-#ifdef CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS
-	if (count >= sizeof(unsigned long)) {
-		const unsigned long *u1 = cs;
-		const unsigned long *u2 = ct;
-		do {
-			if (get_unaligned(u1) != get_unaligned(u2))
-				break;
-			u1++;
-			u2++;
-			count -= sizeof(unsigned long);
-		} while (count >= sizeof(unsigned long));
-		cs = u1;
-		ct = u2;
-	}
-#endif
 
 	for (su1 = cs, su2 = ct; 0 < count; ++su1, ++su2, count--)
 		if ((res = *su1 - *su2) != 0)
@@ -1116,29 +1017,6 @@ char *strnstr(const char *s1, const char *s2, size_t len)
 EXPORT_SYMBOL(strnstr);
 #endif
 
-#if defined(CONFIG_ARCH_HAS_FAST_MULTIPLIER) && BITS_PER_LONG == 64
-
-#define MEMCHR_MASK_GEN(mask) (mask *= 0x0101010101010101ULL)
-
-#elif defined(CONFIG_ARCH_HAS_FAST_MULTIPLIER)
-
-#define MEMCHR_MASK_GEN(mask)                                                  \
-	do {                                                                   \
-		mask *= 0x01010101;                                            \
-		mask |= mask << 32;                                            \
-	} while (0)
-
-#else
-
-#define MEMCHR_MASK_GEN(mask)                                                  \
-	do {                                                                   \
-		mask |= mask << 8;                                             \
-		mask |= mask << 16;                                            \
-		mask |= mask << 32;                                            \
-	} while (0)
-
-#endif
-
 #ifndef __HAVE_ARCH_MEMCHR
 /**
  * memchr - Find a character in an area of memory.
@@ -1157,38 +1035,6 @@ void *memchr(const void *s, int c, size_t n)
 			return (void *)(p - 1);
 		}
 	}
-	return NULL;
-}/**
- * memchr - Find a character in an area of memory.
- * @p: The memory area
- * @c: The byte to search for
- * @length: The size of the area.
- *
- * returns the address of the first occurrence of @c, or %NULL
- * if @c is not found
- */
-void *memchr(const void *p, int c, unsigned long length)
-{
-	u64 mask, val;
-	const void *end = p + length;
-
-	c &= 0xff;
-	if (p <= end - 8) {
-		mask = c;
-		MEMCHR_MASK_GEN(mask);
-
-		for (; p <= end - 8; p += 8) {
-			val = *(u64 *)p ^ mask;
-			if ((val + 0xfefefefefefefeffu) &
-			    (~val & 0x8080808080808080u))
-				break;
-		}
-	}
-
-	for (; p < end; p++)
-		if (*(unsigned char *)p == c)
-			return (void *)p;
-
 	return NULL;
 }
 EXPORT_SYMBOL(memchr);
@@ -1224,7 +1070,16 @@ void *memchr_inv(const void *start, int c, size_t bytes)
 		return check_bytes8(start, value, bytes);
 
 	value64 = value;
-	MEMCHR_MASK_GEN(value64);
+#if defined(CONFIG_ARCH_HAS_FAST_MULTIPLIER) && BITS_PER_LONG == 64
+	value64 *= 0x0101010101010101ULL;
+#elif defined(CONFIG_ARCH_HAS_FAST_MULTIPLIER)
+	value64 *= 0x01010101;
+	value64 |= value64 << 32;
+#else
+	value64 |= value64 << 8;
+	value64 |= value64 << 16;
+	value64 |= value64 << 32;
+#endif
 
 	prefix = (unsigned long)start % 8;
 	if (prefix) {

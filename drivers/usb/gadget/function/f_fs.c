@@ -2965,7 +2965,6 @@ static inline struct f_fs_opts *ffs_do_functionfs_bind(struct usb_function *f,
 		container_of(f->fi, struct f_fs_opts, func_inst);
 	struct ffs_data *ffs_data;
 	int ret;
-	int retries = 100;
 
 	ENTER();
 
@@ -2983,7 +2982,7 @@ static inline struct f_fs_opts *ffs_do_functionfs_bind(struct usb_function *f,
 	if (!ffs_opts->no_configfs)
 		ffs_dev_unlock();
 
-	pr_info("ffs_do_functionfs_bind %d %d\n", ret, retries);
+	pr_info("ffs_do_functionfs_bind %d\n", ret);
 
 	if (ret)
 		return ERR_PTR(ret);
