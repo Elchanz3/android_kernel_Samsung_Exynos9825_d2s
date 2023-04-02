@@ -2427,6 +2427,9 @@ void cpufreq_update_policy(unsigned int cpu)
 	memcpy(&new_policy, policy, sizeof(*policy));
 	new_policy.min = policy->user_policy.min;
 	new_policy.max = policy->user_policy.max;
+	
+	new_policy.min = new_policy.user_policy.min;
+	new_policy.max = new_policy.user_policy.max;
 
 	/*
 	 * BIOS might change freq behind our back
