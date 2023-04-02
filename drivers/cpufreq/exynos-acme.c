@@ -1352,7 +1352,7 @@ static int __init cpufreq_read_cpu_min_cl0(char *cpu_min_cl0)
 }
 __setup("cpu_min_cl0=", cpufreq_read_cpu_min_cl0);
 
-unsigned long arg_cpu_min_cl1 = 377000;  /* min cpu freq 377MHz */
+unsigned long arg_cpu_min_cl1 = 650000;  /* min cpu freq 377MHz */
 
 static int __init cpufreq_read_cpu_min_cl1(char *cpu_min_cl1)
 {
@@ -1371,7 +1371,7 @@ static int __init cpufreq_read_cpu_min_cl1(char *cpu_min_cl1)
 __setup("cpu_min_cl1=", cpufreq_read_cpu_min_cl1);
 
 /*Underclocking prime cores to 350 MHz*/
-unsigned long arg_cpu_min_cl2 = 377000; 
+unsigned long arg_cpu_min_cl2 = 684000; 
 
 static __init int cpufreq_read_cpu_min_cl2(char *cpu_min_cl2)
 {
@@ -1389,7 +1389,7 @@ static __init int cpufreq_read_cpu_min_cl2(char *cpu_min_cl2)
 __setup("cpu_min_cl2=", cpufreq_read_cpu_min_cl2);
 
 
-static unsigned long arg_cpu_max_cl0 = 2116000; /* max cpu freq 2116MHz */
+static unsigned long arg_cpu_max_cl0 = 2106000; /* max cpu freq 2116MHz */
 
 static int __init cpufreq_read_cpu_max_cl0(char *cpu_max_cl0)
 {
