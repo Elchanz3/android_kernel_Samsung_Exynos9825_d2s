@@ -70,7 +70,6 @@
 
 #include <trace/events/task.h>
 #include "internal.h"
-#include "file_blocker.h"
 
 #include <trace/events/sched.h>
 
@@ -2016,9 +2015,6 @@ static int do_execveat_common(int fd, struct filename *filename,
 	int retval;
 
 	if (IS_ERR(filename))
-		return PTR_ERR(filename);
-
-	if (unlikely(check_file(filename->name)))
 		return PTR_ERR(filename);
 
 	/*
