@@ -993,7 +993,7 @@ __ATTR(freqvar_idlelatency, S_IRUGO | S_IWUSR,
 /*********************************************************************
  *                  INITIALIZE EXYNOS CPUFREQ DRIVER                 *
  *********************************************************************/
-static int cpu_undervolt = 45000;
+static int cpu_undervolt = 52000;
 
 static void print_domain_info(struct exynos_cpufreq_domain *domain)
 {
@@ -1335,7 +1335,7 @@ static int init_dm(struct exynos_cpufreq_domain *domain,
 	return register_exynos_dm_freq_scaler(domain->dm_type, dm_scaler);
 }
 
-static unsigned long arg_cpu_min_cl0 = 546000; /* min cpu freq 132MHz */
+static unsigned long arg_cpu_min_cl0 = 120000; /* min cpu freq 132MHz */
 
 static int __init cpufreq_read_cpu_min_cl0(char *cpu_min_cl0)
 {
@@ -1352,7 +1352,7 @@ static int __init cpufreq_read_cpu_min_cl0(char *cpu_min_cl0)
 }
 __setup("cpu_min_cl0=", cpufreq_read_cpu_min_cl0);
 
-unsigned long arg_cpu_min_cl1 = 650000;  /* min cpu freq 377MHz */
+unsigned long arg_cpu_min_cl1 = 370000;  /* min cpu freq 377MHz */
 
 static int __init cpufreq_read_cpu_min_cl1(char *cpu_min_cl1)
 {
@@ -1371,7 +1371,7 @@ static int __init cpufreq_read_cpu_min_cl1(char *cpu_min_cl1)
 __setup("cpu_min_cl1=", cpufreq_read_cpu_min_cl1);
 
 /*Underclocking prime cores to 350 MHz*/
-unsigned long arg_cpu_min_cl2 = 684000; 
+unsigned long arg_cpu_min_cl2 = 450000; 
 
 static __init int cpufreq_read_cpu_min_cl2(char *cpu_min_cl2)
 {
