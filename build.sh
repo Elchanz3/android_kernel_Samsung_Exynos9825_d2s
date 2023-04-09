@@ -11,8 +11,6 @@ export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
 make O=out ARCH=arm64 exynos9820-d2s_defconfig
 
-curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-
 DATE_START=$(date +"%s")
 
 make O=out ARCH=arm64 -j8
