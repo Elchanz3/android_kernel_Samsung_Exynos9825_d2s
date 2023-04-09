@@ -2,14 +2,12 @@
 
 mkdir out
 
-sudo apt-get update && apt-get install git ccache automake lzop bison gperf build-essential zip curl zlib1g-dev zlib1g-dev:i386 g++-multilib libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng -y
-
 DTB_DIR=$(pwd)/out/arch/arm64/boot/dts
 mkdir ${DTB_DIR}/exynos
 
-export PLATFORM_VERSION=11
-export ANDROID_MAJOR_VERSION=r
-export SEC_BUILD_CONF_VENDOR_BUILD_OS=12
+export PLATFORM_VERSION=13
+export ANDROID_MAJOR_VERSION=t
+export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
 make O=out ARCH=arm64 exynos9820-d2s_defconfig
 
