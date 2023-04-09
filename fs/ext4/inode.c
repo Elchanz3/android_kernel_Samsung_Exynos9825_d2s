@@ -4989,16 +4989,26 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 	 * the test is that same one that e2fsck uses
 	 * NeilBrown 1999oct15
 	 */
-	if (inode->i_nlink == 0) {
-			/* this inode is deleted or unallocated */
-			if (flags & EXT4_IGET_SPECIAL) {
-				ext4_error_inode(inode, function, line, 0,
-						 "iget: special inode unallocated");
-				ret = -EFSCORRUPTED;
-			} else
-				ret = -ESTALE;
-			goto bad_inode;
-		}
+	struct inode *__ext4_iget(struct super_block *sb, unsigned long ino, unsigned int flags)
+{
+    struct inode *inode = iget_locked(sb, ino);
+    if (!inode)
+        return ERR_PTR(-ENOMEM);
+
+    if (!(flags & EXT4_IGET_NORMAL))
+        unlock_new_inode(inode);
+
+    if (S_ISREG(inode->i_mode)) {
+        // ...
+    } else {
+        goto bad_inode;
+        
+         return inode;
+
+bad_inode:
+    iput(inode);
+    return ERR_PTR(-EIO);
+    }
 		/* The only unlinked inodes we let through here have
 		 * valid i_mode and are being read by the orphan
 		 * recovery code: that's fine, we're about to complete
