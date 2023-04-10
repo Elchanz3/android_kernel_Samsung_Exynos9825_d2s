@@ -5230,7 +5230,7 @@
 		gpu_min_clock = <0x26160>;
 		gpu_dvfs_start_clock = <0x3f7a0>;
 		gpu_dvfs_bl_config_clock = <0x26160>;
-		gpu_default_voltage = <0xc3500>;
+		gpu_default_voltage = <B7C50>;
 		gpu_cold_minimum_vol = <0x0>;
 		gpu_voltage_offset_margin = <0x927c>;
 		gpu_tmu_control = <0x1>;
