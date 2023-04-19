@@ -9,14 +9,14 @@ export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
-BUILD_CROSS_COMPILE=aarch64-zyc-linux-gnu-
-KERNEL_LLVM_BIN=clang
-CLANG_TRIPLE=aarch64-zyc-linux-gnu-
+BUILD_CROSS_COMPILE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
+KERNEL_LLVM_BIN=/home/chanz22/Downloads/clang-r468909/bin/clang
+CLANG_TRIPLE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
 
 DATE_START=$(date +"%s")
 
 make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN exynos9820-d2s_defconfig
-make O=out ARCH=arm64 2>&1 |tee ../compile-Weibo.log \
+make O=out ARCH=arm64 \
 	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
 	CLANG_TRIPLE=$CLANG_TRIPLE -j8
 
@@ -40,12 +40,5 @@ if [[ -f "$IMAGE" ]]; then
 	DIFF=$(($DATE_END - $DATE_START))
 
 	echo -e "\nTime elapsed: $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds.\n"
-	adb wait-for-recovery
-	adb push $KERNELZIP /sdcard/
-	
-	#auto install kernel to your device
-	adb sideload $KERNELZIP
-	
-else
-	echo -e "ERROR\n"
+
 fi
