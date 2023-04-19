@@ -5228,9 +5228,9 @@
 		gpu_max_clock = <0xab630>;
 		gpu_max_clock_limit = <0xab630>;
 		gpu_min_clock = <0x26160>;
-		gpu_dvfs_start_clock = <0xab630>;
+		gpu_dvfs_start_clock = <0x3f7a0>;
 		gpu_dvfs_bl_config_clock = <0x26160>;
-		gpu_default_voltage = <0xb6d0>;
+		gpu_default_voltage = <0xB6D0>;
 		gpu_cold_minimum_vol = <0x0>;
 		gpu_voltage_offset_margin = <0x83e0>;
 		gpu_tmu_control = <0x1>;
