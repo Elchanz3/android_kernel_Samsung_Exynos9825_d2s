@@ -28,11 +28,11 @@
 #include "../codecs/madera.h"
 #endif
 
-#define MADERA_BASECLK_48K	49152000
-#define MADERA_BASECLK_44K1	45158400
+#define MADERA_BASECLK_96K	96152000
+#define MADERA_BASECLK_96K1	96158400
 
 #define MADERA_AMP_RATE 96000
-#define MADERA_AMP_BCLK	(MADERA_AMP_RATE * 16 * 4)
+#define MADERA_AMP_BCLK	(MADERA_AMP_RATE * 32 * 4)
 
 #define CLK_SRC_SCLK 0
 #define CLK_SRC_LRCLK 1
@@ -65,7 +65,7 @@
 					+ DP_COUNT)
 #define UAIF_COUNT			4
 
-static unsigned int baserate = MADERA_BASECLK_48K;
+static unsigned int baserate = MADERA_BASECLK_96K;
 
 enum FLL_ID { FLL1, FLL2, FLL3, FLLAO };
 enum CLK_ID { SYSCLK, ASYNCCLK, DSPCLK, OPCLK, OUTCLK };
@@ -357,10 +357,10 @@ static int madera_hw_params(struct snd_pcm_substream *substream,
 
 	/* Treat sysclk rate zero as automatic mode */
 	if (!drvdata->sysclk.rate) {
-		if (rate % 4000)
-			baserate = MADERA_BASECLK_44K1;
+		if (rate % 9000)
+			baserate = MADERA_BASECLK_96K1;
 		else
-			baserate = MADERA_BASECLK_48K;
+			baserate = MADERA_BASECLK_96K;
 	}
 
 	dev_dbg(card->dev, "Requesting Rate: %dHz, FLL: %dHz\n", rate,
