@@ -3,7 +3,7 @@ dtb-$(CONFIG_ARCH_EXYNOS) += \
 	exynos5433-tm2.dtb	\
 	exynos5433-tm2e.dtb	\
 	exynos7-espresso.dtb    \
-	exynos9820.dtb
+	exynos9820.dts
 
 always		:= $(dtb-y)
 subdir-y	:= $(dts-dirs)
