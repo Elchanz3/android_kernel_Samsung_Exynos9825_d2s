@@ -4990,58 +4990,7 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 	 * the test is that same one that e2fsck uses
 	 * NeilBrown 1999oct15
 	 */
-	struct inode *__ext4_iget(struct super_block *sb, unsigned long ino, unsigned int flags)
-{
-    struct inode *inode = iget_locked(sb, ino);
-    if (!inode)
-        return ERR_PTR(-ENOMEM);
 
-    if (!(flags & EXT4_IGET_NORMAL))
-        unlock_new_inode(inode);
-
-    if (S_ISREG(inode->i_mode)) {
-        // ...
-    } else {
-        goto bad_inode;
-        
-         return inode;
-
-bad_inode:
-    iput(inode);
-    return ERR_PTR(-EIO);
-    }
-		/* The only unlinked inodes we let through here have
-		 * valid i_mode and are being read by the orphan
-		 * recovery code: that's fine, we're about to complete
-		 * the process of deleting those.
-		 * OR it is the EXT4_BOOT_LOADER_INO which is
-		 * not initialized on a new filesystem. */
-	}
-	ei->i_flags = le32_to_cpu(raw_inode->i_flags);
-	inode->i_blocks = ext4_inode_blocks(raw_inode, ei);
-	ei->i_file_acl = le32_to_cpu(raw_inode->i_file_acl_lo);
-	if (ext4_has_feature_64bit(sb))
-		ei->i_file_acl |=
-			((__u64)le16_to_cpu(raw_inode->i_file_acl_high)) << 32;
-	inode->i_size = ext4_isize(sb, raw_inode);
-	if ((size = i_size_read(inode)) < 0) {
-		ext4_error_inode(inode, function, line, 0,
-				 "iget: bad i_size value: %lld", size);
-		ret = -EFSCORRUPTED;
-		goto bad_inode;
-	}
-	/*
-	 * If dir_index is not enabled but there's dir with INDEX flag set,
-	 * we'd normally treat htree data as empty space. But with metadata
-	 * checksumming that corrupts checksums so forbid that.
-	 */
-	if (!ext4_has_feature_dir_index(sb) && ext4_has_metadata_csum(sb) &&
-	    ext4_test_inode_flag(inode, EXT4_INODE_INDEX)) {
-		EXT4_ERROR_INODE(inode,
-				 "iget: Dir with htree data on filesystem without dir_index feature.");
-		ret = -EFSCORRUPTED;
-		goto bad_inode;
-	}
 	ei->i_disksize = inode->i_size;
 #ifdef CONFIG_QUOTA
 	ei->i_reserved_quota = 0;
