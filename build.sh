@@ -16,7 +16,7 @@ DATE_START=$(date +"%s")
 # remove a previous kernel image
 rm $IMAGE &> /dev/null
 
-make O=out ARCH=arm64 -j8
+make O=out ARCH=arm64 -j8 2>&1 |tee ../compile-Weibo.log
 
 $(pwd)/tools/mkdtimg cfg_create $(pwd)/out/dtb.img dt.configs/exynos9820.cfg -d ${DTB_DIR}/exynos
 
