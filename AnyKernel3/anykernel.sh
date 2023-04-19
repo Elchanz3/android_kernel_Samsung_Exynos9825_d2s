@@ -68,6 +68,45 @@ echo " ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡠⢔�
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠚⠀⠀⠈⠓⠤⣀⡀⠀⠀⠀⠀⠀⢀⣠⠔⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⠈⠉⠉⠉⠉⠉⡁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 "
+echo "        ################################################
+              #           DEV : Snapdragon teaks             #
+              ################################################
+"
+echo " 
+        #################################################
+        #                 MAIN FEATURES                 #
+        #################################################
+"
+
+echo " 
+#####################
+-Kernel
+*lasted linux 4.14.312 (lasted 4.14)
+*Tick rate 250Hz
+#####################
+-CPU
+*Exynos M4 OC up to 3,02GHz
+*Cortex A75 2,40GHz
+*Cortex A55 OC up to 2,11GHz
+*Undervolt -20mV
+*idle optmizations
+*specific optmizations for A55 & A75
+#####################
+-DVFS
+*DVFS frequency control unlocked
+*unique settings to boost up to 2093 MHz depending on workload!
+and some optmizations!
+#####################
+-GPU
+*Undervolt -80mV
+*Driver optmizations
+*Adaptative power policy
+*Always_on (enabled by default)
+#####################
+"
+echo "see more in xda!"
+
+
 
 ## AnyKernel boot install
 dump_boot;
