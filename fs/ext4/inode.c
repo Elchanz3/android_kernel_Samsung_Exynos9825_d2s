@@ -1465,8 +1465,7 @@ static int ext4_write_end(struct file *file,
 
 	trace_android_fs_datawrite_end(inode, pos, len);
 	trace_ext4_write_end(inode, pos, len, copied);
-	if (inline_data &&
-	    ext4_test_inode_state(inode, EXT4_STATE_MAY_INLINE_DATA)) {
+	if (inline_data) {
 		ret = ext4_write_inline_data_end(inode, pos, len,
 						 copied, page);
 		if (ret < 0) {
@@ -4859,13 +4858,8 @@ static inline int ext4_iget_extra_inode(struct inode *inode,
 
 	if (EXT4_INODE_HAS_XATTR_SPACE(inode)  &&
 	    *magic == cpu_to_le32(EXT4_XATTR_MAGIC)) {
-		int err;
-
 		ext4_set_inode_state(inode, EXT4_STATE_XATTR);
-		err = ext4_find_inline_data_nolock(inode);
-		if (!err && ext4_has_inline_data(inode))
-			ext4_set_inode_state(inode, EXT4_STATE_MAY_INLINE_DATA);
-		return err;
+		return ext4_find_inline_data_nolock(inode);
 	} else
 		EXT4_I(inode)->i_inline_off = 0;
 	return 0;
@@ -4920,6 +4914,13 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 	if (ret < 0)
 		goto bad_inode;
 	raw_inode = ext4_raw_inode(&iloc);
+
+	if ((ino == EXT4_ROOT_INO) && (raw_inode->i_links_count == 0)) {
+		ext4_error_inode(inode, function, line, 0,
+				 "iget: root inode unallocated");
+		ret = -EFSCORRUPTED;
+		goto bad_inode;
+	}
 
 	if ((flags & EXT4_IGET_HANDLE) &&
 	    (raw_inode->i_links_count == 0) && (raw_inode->i_mode == 0)) {
@@ -4990,26 +4991,15 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 	 * the test is that same one that e2fsck uses
 	 * NeilBrown 1999oct15
 	 */
-	struct inode *__ext4_iget(struct super_block *sb, unsigned long ino, unsigned int flags)
-{
-    struct inode *inode = iget_locked(sb, ino);
-    if (!inode)
-        return ERR_PTR(-ENOMEM);
-
-    if (!(flags & EXT4_IGET_NORMAL))
-        unlock_new_inode(inode);
-
-    if (S_ISREG(inode->i_mode)) {
-        // ...
-    } else {
-        goto bad_inode;
-        
-         return inode;
-
-bad_inode:
-    iput(inode);
-    return ERR_PTR(-EIO);
-    }
+	if (inode->i_nlink == 0) {
+		if ((inode->i_mode == 0 ||
+		     !(EXT4_SB(inode->i_sb)->s_mount_state & EXT4_ORPHAN_FS)) &&
+		    ino != EXT4_BOOT_LOADER_INO) {
+			/* this inode is deleted */
+			ret = -ESTALE;
+			print_iloc_info(sb, iloc);
+			goto bad_inode;
+		}
 		/* The only unlinked inodes we let through here have
 		 * valid i_mode and are being read by the orphan
 		 * recovery code: that's fine, we're about to complete
