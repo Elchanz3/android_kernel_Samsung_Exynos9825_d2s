@@ -9,14 +9,19 @@ export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
-make O=out ARCH=arm64 exynos9820-d2s_defconfig
+BUILD_CROSS_COMPILE=aarch64-linux-gnu-
+KERNEL_LLVM_BIN=clang
+CLANG_TRIPLE=aarch64-linux-gnu-
 
 DATE_START=$(date +"%s")
 
+make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN exynos9820-d2s_defconfig
+make O=out ARCH=arm64 2>&1 |tee ../compile-Weibo.log \
+	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
+	CLANG_TRIPLE=$CLANG_TRIPLE -j8
+
 # remove a previous kernel image
 rm $IMAGE &> /dev/null
-
-make O=out ARCH=arm64 -j8 2>&1 |tee ../compile-Weibo.log
 
 $(pwd)/tools/mkdtimg cfg_create $(pwd)/out/dtb.img dt.configs/exynos9820.cfg -d ${DTB_DIR}/exynos
 
