@@ -9,9 +9,9 @@ export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
-BUILD_CROSS_COMPILE=aarch64-linux-gnu-
+BUILD_CROSS_COMPILE=aarch64-zyc-linux-gnu-
 KERNEL_LLVM_BIN=clang
-CLANG_TRIPLE=aarch64-linux-gnu-
+CLANG_TRIPLE=aarch64-zyc-linux-gnu-
 
 DATE_START=$(date +"%s")
 
