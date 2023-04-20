@@ -141,7 +141,7 @@ GPEX_STATIC ssize_t reset_time_in_state(const char *buf, size_t count)
 }
 CREATE_SYSFS_DEVICE_WRITE_FUNCTION(reset_time_in_state)
 
-#define SUSTAINABLE_FREQ 702000 // KHz
+#define SUSTAINABLE_FREQ 793000 // KHz
 GPEX_STATIC ssize_t set_max_lock_dvfs(const char *buf, size_t count)
 {
 	int ret, clock = 0;
