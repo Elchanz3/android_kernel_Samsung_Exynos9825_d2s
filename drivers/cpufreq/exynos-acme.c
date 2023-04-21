@@ -1457,7 +1457,7 @@ static __init int init_domain(struct exynos_cpufreq_domain *domain,
 		domain->min_freq = arg_cpu_min_cl1;
 	} else if (domain->id == 2) {
 		domain->max_freq = arg_cpu_max_cl2;
-        domain->min_freq = arg_cpu_min_cl2;
+                domain->min_freq = arg_cpu_min_cl2;
 	}
 
 	/* If this domain has boost freq, change max */
