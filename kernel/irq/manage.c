@@ -111,9 +111,6 @@ void synchronize_irq(unsigned int irq)
 		 * running. Now verify that no threaded handlers are
 		 * active.
 		 */
-		 
-		wait_event_interruptible(desc->wait_for_threads
-			   !atomic_read(&desc->threads_active));
 
 		sec_debug_set_task_in_sync_irq(0, 0, 0, 0);
 	}
@@ -2245,5 +2242,6 @@ int irq_set_irqchip_state(unsigned int irq, enum irqchip_irq_state which,
 
 	irq_put_desc_busunlock(desc, flags);
 	return err;
-}
+	
 EXPORT_SYMBOL_GPL(irq_set_irqchip_state);
+}
