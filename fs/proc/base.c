@@ -109,21 +109,6 @@
 #include <linux/delayacct.h>
 #endif
 
-struct task_kill_info {
-	struct task_struct *task;
-	struct work_struct work;
-};
-
-static void proc_kill_task(struct work_struct *work)
-{
-	struct task_kill_info *kinfo = container_of(work, typeof(*kinfo), work);
-	struct task_struct *task = kinfo->task;
-
-	send_sig(SIGKILL, task, 0);
-	put_task_struct(task);
-	kfree(kinfo);
-}
-
 /* NOTE:
  *	Implementing inode permission operations in /proc is almost
  *	certainly an error.  Permission checks need to happen during
@@ -990,127 +975,6 @@ static const struct file_operations proc_mem_operations = {
 	.release	= mem_release,
 };
 
-#ifdef CONFIG_FAST_TRACK
-static int proc_static_ftt_show(struct seq_file *m, void *v)
-{
-	struct inode *inode = m->private;
-	struct task_struct *p;
-	p = get_proc_task(inode);
-	if (!p) {
-		return -ESRCH;
-	}
-	task_lock(p);
-	seq_printf(m, "%d\n", p->se.ftt_mark);
-	task_unlock(p);
-	put_task_struct(p);
-	return 0;
-}
-
-static ssize_t proc_static_ftt_read(struct file* file, char __user *buf,
-					    size_t count, loff_t *ppos)
-{
-	char buffer[PROC_NUMBUF];
-	struct task_struct *task = NULL;
-	int static_ftt = -1;
-	size_t len = 0;
-
-	char task_comm[TASK_COMM_LEN];
-
-	task = get_proc_task(file_inode(file));
-	if (!task) {
-		return -ESRCH;
-	}
-	static_ftt = task->se.ftt_mark;
-	put_task_struct(task);
-	len = snprintf(buffer, sizeof(buffer), "%d\n", static_ftt);
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-static ssize_t proc_static_ftt_write(struct file *file, const char __user *buf,
-			     size_t count, loff_t *ppos)
-{
-	struct task_struct *task;
-	char buffer[PROC_NUMBUF] = {0};
-	const size_t max_len = sizeof(buffer) - 1;
-	int err, static_ftt;
-	u64 prev_vrt, prev_vdelta;
-
-	memset(buffer, 0, sizeof(buffer));
-	if (copy_from_user(buffer, buf, count > max_len ? max_len : count)) {
-		return -EFAULT;
-	}
-	err = kstrtoint(strstrip(buffer), 0, &static_ftt);
-	if(err) {
-		return err;
-	}
-
-	task = get_proc_task(file_inode(file));
-	if (!task) {
-		return -ESRCH;
-	}
-
-	prev_vrt = task->se.vruntime;
-	prev_vdelta = task->se.ftt_vrt_delta;
-	if(task->se.ftt_mark && static_ftt == 0) {
-		fttstat.ftt_cnt--;
-		ftt_unmark(task);
-		printk_deferred("FTT unset pid %d comm %.20s vrt %llu %llu %llu %llu"
-			"fttcount %d pftt %d w %d\n",
-			task->pid, task->comm,
-			prev_vrt, prev_vdelta, task->se.vruntime, task->se.ftt_vrt_delta,
-			fttstat.ftt_cnt, fttstat.pick_ftt, fttstat.wrong);
-	} else if(task->se.ftt_mark == 0 && static_ftt) {
-		fttstat.ftt_cnt++;
-		ftt_mark(task);
-		printk_deferred("FTT set pid %d comm %.20s vrt %llu %llu %llu %llu\n",
-			task->pid, task->comm,
-			prev_vrt, prev_vdelta, task->se.vruntime, task->se.ftt_vrt_delta);
-	}
-
-	put_task_struct(task);
-	return count;
-}
-
-static int proc_static_ftt_open(struct inode* inode, struct file *filp)
-{
-	return single_open(filp, proc_static_ftt_show, inode);
-}
-
-static const struct file_operations proc_static_ftt_operations = {
-	.open       = proc_static_ftt_open,
-	.read       = proc_static_ftt_read,
-	.write      = proc_static_ftt_write,
-	.llseek     = seq_lseek,
-	.release    = single_release,
-};
-
-static int seq_file_ftt_show(struct seq_file *seq, void *v)
-{
-	seq_printf(seq, "static ftt count: %d pickftt %d wrong %d\n",
-		fttstat.ftt_cnt, fttstat.pick_ftt, fttstat.wrong);
-	return 0;
-}
-
-static int fttinfo_open(struct inode *inode, struct file *file)
-{
-        return single_open(file, &seq_file_ftt_show, NULL);
-}
-
-static const struct file_operations proc_fttinfo_operations = {
-        .open           = fttinfo_open,
-        .read           = seq_read,
-        .llseek         = seq_lseek,
-        .release        = seq_release,
-};
-
-static int __init proc_fttinfo_init(void)
-{
-        proc_create("fttinfo", S_IRWXUGO, NULL, &proc_fttinfo_operations);
-        return 0;
-}
-fs_initcall(proc_fttinfo_init);
-#endif
-
 static int environ_open(struct inode *inode, struct file *file)
 {
 	return __mem_open(inode, file, PTRACE_MODE_READ);
@@ -1287,9 +1151,6 @@ static int __set_oom_adj(struct file *file, int oom_adj, bool legacy)
 		task->signal->oom_score_adj_min = (short)oom_adj;
 	trace_oom_score_adj_update(task);
 
-	if (oom_adj >= 700)
-		strncpy(task_comm, task->comm, TASK_COMM_LEN);
-
 	if (mm) {
 		struct task_struct *p;
 
@@ -1316,20 +1177,6 @@ static int __set_oom_adj(struct file *file, int oom_adj, bool legacy)
 err_unlock:
 	mutex_unlock(&oom_adj_mutex);
 	put_task_struct(task);
-	/* These apps burn through CPU in the background. Don't let them. */
-	if (!err && oom_adj >= 700) {
-		if (!strcmp(task_comm, "vending:download_ser")) {
-			struct task_kill_info *kinfo;
-
-			kinfo = kmalloc(sizeof(*kinfo), GFP_KERNEL);
-			if (kinfo) {
-				get_task_struct(task);
-				kinfo->task = task;
-				INIT_WORK(&kinfo->work, proc_kill_task);
-				schedule_work(&kinfo->work);
-			}
-		}
-	}
 	return err;
 }
 
