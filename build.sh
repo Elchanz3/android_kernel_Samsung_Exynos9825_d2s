@@ -34,7 +34,7 @@ if [[ -f "$IMAGE" ]]; then
 	mv out/dtb.img AnyKernel3/dtb
 	mv $IMAGE AnyKernel3/zImage
 	cd AnyKernel3
-	zip -r9 zip -r9 $KERNELZIP .
+	zip -r9 $KERNELZIP .
 	
 	DATE_END=$(date +"%s")
 	DIFF=$(($DATE_END - $DATE_START))
