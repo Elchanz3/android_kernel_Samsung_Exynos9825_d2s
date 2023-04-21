@@ -1,5 +1,7 @@
 #!/bin/bash
 
+clear
+
 mkdir out
 
 DTB_DIR=$(pwd)/out/arch/arm64/boot/dts
@@ -18,7 +20,7 @@ DATE_START=$(date +"%s")
 make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN exynos9820-d2s_defconfig
 make O=out ARCH=arm64 \
 	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
-	CLANG_TRIPLE=$CLANG_TRIPLE -j8
+	CLANG_TRIPLE=$CLANG_TRIPLE -j8 2>&1 |tee ../compile-Weibo.log
 
 # remove a previous kernel image
 rm $IMAGE &> /dev/null
