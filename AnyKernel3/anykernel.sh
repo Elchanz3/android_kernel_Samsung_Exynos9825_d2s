@@ -11,6 +11,7 @@ do.systemless=1
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=d2s
+device.name2=beyond0lte
 supported.versions=
 supported.patchlevels=
 '; } # end properties
