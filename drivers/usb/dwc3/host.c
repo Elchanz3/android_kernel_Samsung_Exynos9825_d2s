@@ -20,7 +20,6 @@
 #include <linux/usb/exynos_usb_audio.h>
 #endif
 
-#include "../host/xhci-plat.h"
 #include "core.h"
 
 #ifdef CONFIG_SND_EXYNOS_USB_AUDIO
@@ -28,8 +27,11 @@ struct host_data xhci_data;
 struct exynos_usb_audio *usb_audio;
 #endif
 
-static const struct xhci_plat_priv dwc3_xhci_plat_priv = {
-	.quirks = XHCI_SKIP_PHY_INIT,
+struct usb_xhci_pre_alloc {
+	u8 *pre_dma_alloc;
+	u64 offset;
+
+	dma_addr_t	dma;
 };
 
 struct usb_xhci_pre_alloc xhci_pre_alloc;
@@ -119,11 +121,6 @@ int dwc3_host_init(struct dwc3 *dwc)
 		dev_err(dwc->dev, "couldn't add resources to xHCI device\n");
 		goto err1;
 	}
-
-	ret = platform_device_add_data(xhci, &dwc3_xhci_plat_priv,
-					sizeof(dwc3_xhci_plat_priv));
-	if (ret)
-		goto err;
 
 	memset(props, 0, sizeof(struct property_entry) * ARRAY_SIZE(props));
 
