@@ -57,6 +57,9 @@ static void start_poll_queue(struct thermal_zone_device *tz, int delay)
 {
 	mod_delayed_work(thermal_wq, &tz->poll_queue,
 			msecs_to_jiffies(delay));
+
+	mod_delayed_work_on(tz->poll_queue_cpu, system_freezable_wq, &tz->poll_queue,
+			msecs_to_jiffies(delay));
 }
 
 static struct thermal_governor *def_governor;
@@ -1246,6 +1249,7 @@ thermal_zone_device_register(const char *type, int trips, int mask,
 	tz->trips = trips;
 	tz->passive_delay = passive_delay;
 	tz->polling_delay = polling_delay;
+	tz->poll_queue_cpu = 1;
 
 	/* sys I/F */
 	/* Add nodes that are always present via .groups */
@@ -1535,14 +1539,77 @@ static int __init genetlink_init(void)
 	return genl_register_family(&thermal_event_genl_family);
 }
 
-static void genetlink_exit(void)
-{
-	genl_unregister_family(&thermal_event_genl_family);
-}
 #else /* !CONFIG_NET */
 static inline int genetlink_init(void) { return 0; }
-static inline void genetlink_exit(void) {}
 #endif /* !CONFIG_NET */
+
+
+static int __init thermal_register_governors(void)
+{
+	int result;
+
+	result = thermal_gov_step_wise_register();
+	if (result)
+		return result;
+
+	result = thermal_gov_fair_share_register();
+	if (result)
+		return result;
+
+	result = thermal_gov_bang_bang_register();
+	if (result)
+		return result;
+
+	result = thermal_gov_user_space_register();
+	if (result)
+		return result;
+
+	return thermal_gov_power_allocator_register();
+}
+
+static void thermal_unregister_governors(void)
+{
+	thermal_gov_step_wise_unregister();
+	thermal_gov_fair_share_unregister();
+	thermal_gov_bang_bang_unregister();
+	thermal_gov_user_space_unregister();
+	thermal_gov_power_allocator_unregister();
+}
+
+static int thermal_cpu_callback(struct notifier_block *nfb,
+					unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+	struct thermal_zone_device *pos;
+
+	switch (action) {
+	case CPU_ONLINE:
+		if (cpu == 1) {
+			list_for_each_entry(pos, &thermal_tz_list, node) {
+				pos->poll_queue_cpu = 1;
+				if (pos->polling_delay) {
+					start_poll_queue(pos, pos->polling_delay);
+				}
+			}
+		}
+		break;
+	case CPU_DOWN_PREPARE:
+		list_for_each_entry(pos, &thermal_tz_list, node) {
+			if (pos->poll_queue_cpu == cpu) {
+				pos->poll_queue_cpu = 0;
+				if (pos->polling_delay)
+					start_poll_queue(pos, pos->polling_delay);
+			}
+		}
+		break;
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block thermal_cpu_notifier =
+{
+	.notifier_call = thermal_cpu_callback,
+};
 
 static int thermal_pm_notify(struct notifier_block *nb,
 			     unsigned long mode, void *_unused)
@@ -1607,6 +1674,8 @@ static int __init thermal_init(void)
 	if (result)
 		goto exit_netlink;
 
+	register_hotcpu_notifier(&thermal_cpu_notifier);
+
 	result = register_pm_notifier(&thermal_pm_nb);
 	if (result)
 		pr_warn("Thermal: Can not register suspend notifier, return %d\n",
@@ -1632,8 +1701,8 @@ error:
 static void __exit thermal_exit(void)
 {
 	unregister_pm_notifier(&thermal_pm_nb);
+	unregister_hotcpu_notifier(&thermal_cpu_notifier);
 	of_thermal_destroy_zones();
-	genetlink_exit();
 	class_unregister(&thermal_class);
 	thermal_unregister_governors();
 	ida_destroy(&thermal_tz_ida);
@@ -1642,5 +1711,5 @@ static void __exit thermal_exit(void)
 	mutex_destroy(&thermal_governor_lock);
 }
 
-fs_initcall(thermal_init);
+core_initcall(thermal_init);
 module_exit(thermal_exit);
