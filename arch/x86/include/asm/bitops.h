@@ -143,9 +143,7 @@ static __always_inline void __clear_bit(long nr, volatile unsigned long *addr)
 static __always_inline bool clear_bit_unlock_is_negative_byte(long nr, volatile unsigned long *addr)
 {
 	bool negative;
-
-	asm volatile(LOCK_PREFIX "andb %2,%1\n\t"
-
+	asm volatile(LOCK_PREFIX "andb %2,%1"
 		CC_SET(s)
 		: CC_OUT(s) (negative), ADDR
 		: "ir" ((char) ~(1 << nr)) : "memory");
