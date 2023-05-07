@@ -1110,51 +1110,38 @@ EXPORT_SYMBOL(cpufreq_power_cooling_register);
 
 /**
  * of_cpufreq_power_cooling_register() - create cpufreq cooling device with power extensions
- * @policy: CPUFreq policy.
+ * @np:	a valid struct device_node to the cooling device device tree node
+ * @policy: cpufreq policy
+ * @capacitance:	dynamic power coefficient for these cpus
+ * @plat_static_func:	function to calculate the static power consumed by these
+ *			cpus (optional)
  *
  * This interface function registers the cpufreq cooling device with
  * the name "thermal-cpufreq-%x".  This api can support multiple
  * instances of cpufreq cooling devices.  Using this API, the cpufreq
- * cooling device will be linked to the device tree node of the provided
- * policy's CPU.
+ * cooling device will be linked to the device tree node provided.
  * Using this function, the cooling device will implement the power
  * extensions by using a simple cpu power model.  The cpus must have
  * registered their OPPs using the OPP library.
  *
- * It also takes into account, if property present in policy CPU node, the
- * static power consumed by the cpu.
+ * An optional @plat_static_func may be provided to calculate the
+ * static power consumed by these cpus.  If the platform's static
+ * power consumption is unknown or negligible, make it NULL.
  *
  * Return: a valid struct thermal_cooling_device pointer on success,
- * and NULL on failure.
+ * on failure, it returns a corresponding ERR_PTR().
  */
 struct thermal_cooling_device *
-of_cpufreq_power_cooling_register(struct cpufreq_policy *policy)
+of_cpufreq_power_cooling_register(struct device_node *np,
+				  struct cpufreq_policy *policy,
+				  u32 capacitance,
+				  get_static_t plat_static_func)
 {
-	struct device_node *np = of_get_cpu_node(policy->cpu, NULL);
-	struct thermal_cooling_device *cdev = NULL;
-	u32 capacitance = 0;
+	if (!np)
+		return ERR_PTR(-EINVAL);
 
-	if (!np) {
-		pr_err("cpu_cooling: OF node not available for cpu%d\n",
-		       policy->cpu);
-		return NULL;
-	}
-
-	if (of_find_property(np, "#cooling-cells", NULL)) {
-		of_property_read_u32(np, "dynamic-power-coefficient",
-				     &capacitance);
-
-		cdev = __cpufreq_cooling_register(np, policy, capacitance,
-						  NULL);
-		if (IS_ERR(cdev)) {
-			pr_err("cpu_cooling: cpu%d is not running as cooling device: %ld\n",
-			       policy->cpu, PTR_ERR(cdev));
-			cdev = NULL;
-		}
-	}
-
-	of_node_put(np);
-	return cdev;
+	return __cpufreq_cooling_register(np, policy, capacitance,
+				plat_static_func);
 }
 EXPORT_SYMBOL(of_cpufreq_power_cooling_register);
 
