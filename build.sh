@@ -11,17 +11,9 @@ export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
-/* 
-*  to build the kernel on any linux based OS remove the "#" from the line below ↓
-*/
-
-# BUILD_CROSS_COMPILE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
-# KERNEL_LLVM_BIN=/home/chanz22/Downloads/Clang-17.0.0-20230419/bin/clang
-# CLANG_TRIPLE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
-
-/*
-*  to build this kernel on servers remove the "#" from the line below ↓
-*/
+BUILD_CROSS_COMPILE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
+KERNEL_LLVM_BIN=/home/chanz22/Downloads/Clang-17.0.0-20230419/bin/clang
+CLANG_TRIPLE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
 
 # BUILD_CROSS_COMPILE=aarch64-linux-gnu-
 # KERNEL_LLVM_BIN=clang
