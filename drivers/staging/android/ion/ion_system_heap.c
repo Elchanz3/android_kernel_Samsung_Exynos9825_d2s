@@ -189,9 +189,6 @@ free_pages:
 	return -ENOMEM;
 }
 
-static int max_page_pool_size = 24300;
-module_param(max_page_pool_size, int, 0600);
-
 static void ion_system_heap_free(struct ion_buffer *buffer)
 {
 	struct ion_system_heap *sys_heap = container_of(buffer->heap,
