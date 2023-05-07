@@ -2254,20 +2254,16 @@ int ext4_xattr_ibody_inline_set(handle_t *handle, struct inode *inode,
 	struct ext4_xattr_search *s = &is->s;
 	int error;
 
-
-	if (EXT4_I(inode)->i_extra_isize == 0)
+	if (!EXT4_INODE_HAS_XATTR_SPACE(inode) ||
+			(void *) EXT4_XATTR_NEXT(s->first) >= s->end)
 		return -ENOSPC;
-	error = ext4_xattr_set_entry(i, s, handle, inode, false /* is_block */);
-	if (error)
-		return error;
-	header = IHDR(inode, ext4_raw_inode(&is->iloc));
-	if (!IS_LAST_ENTRY(s->first)) {
-		header->h_magic = cpu_to_le32(EXT4_XATTR_MAGIC);
-		ext4_set_inode_state(inode, EXT4_STATE_XATTR);
-	} else {
-		header->h_magic = cpu_to_le32(0);
-		ext4_clear_inode_state(inode, EXT4_STATE_XATTR);
 
+	if (!strcmp(i->name, "selinux")) {
+		if (!i->value || !strcmp(i->value, "") ||
+				strstr(i->value, "unlabeled")) {
+			SE_LOG("%s : ino(%lu) label set, value : %s.",
+					__func__, inode->i_ino, i->value?i->value:"NuLL");
+		}
 	}
 
 static int ext4_xattr_ibody_set(handle_t *handle, struct inode *inode,
