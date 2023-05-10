@@ -993,6 +993,7 @@ __ATTR(freqvar_idlelatency, S_IRUGO | S_IWUSR,
 /*********************************************************************
  *                  INITIALIZE EXYNOS CPUFREQ DRIVER                 *
  *********************************************************************/
+static int cpu_undervolt = 25000;
 
 static void print_domain_info(struct exynos_cpufreq_domain *domain)
 {
@@ -1091,8 +1092,7 @@ static __init int init_table(struct exynos_cpufreq_domain *domain)
 		domain->freq_table[index].driver_data = index;
 
 		/* Undervolt with uV value */
-
-		volt_table[index] -= (int)(volt_table[index]/10.0);
+		volt_table[index] -= cpu_undervolt;
 
 		if (table[index] > domain->max_freq)
 			domain->freq_table[index].frequency = CPUFREQ_ENTRY_INVALID;
@@ -1109,7 +1109,6 @@ static __init int init_table(struct exynos_cpufreq_domain *domain)
 
 				dev_pm_opp_add(get_cpu_device(cpu),
 						table[index] * 1000, volt_table[index]);
-				pr_info("volt_table[%d]=%d\n", index, volt_table[index]);
 			}
 		}
 
