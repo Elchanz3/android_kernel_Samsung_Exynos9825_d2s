@@ -1874,6 +1874,7 @@ int kbase_mmu_insert_pages_no_flush(struct kbase_device *kbdev, struct kbase_mmu
 	if (nr == 0)
 		return 0;
 
+
 	if (!rt_mutex_trylock(&mmut->mmu_lock)) {
 		/*
 		 * Sometimes, mmu_lock takes long time to be released.
