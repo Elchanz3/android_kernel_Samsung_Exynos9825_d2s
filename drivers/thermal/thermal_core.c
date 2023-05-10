@@ -1535,8 +1535,13 @@ static int __init genetlink_init(void)
 	return genl_register_family(&thermal_event_genl_family);
 }
 
+static void genetlink_exit(void)
+{
+	genl_unregister_family(&thermal_event_genl_family);
+}
 #else /* !CONFIG_NET */
 static inline int genetlink_init(void) { return 0; }
+static inline void genetlink_exit(void) {}
 #endif /* !CONFIG_NET */
 
 static int thermal_pm_notify(struct notifier_block *nb,
@@ -1628,6 +1633,7 @@ static void __exit thermal_exit(void)
 {
 	unregister_pm_notifier(&thermal_pm_nb);
 	of_thermal_destroy_zones();
+	genetlink_exit();
 	class_unregister(&thermal_class);
 	thermal_unregister_governors();
 	ida_destroy(&thermal_tz_ida);
@@ -1636,5 +1642,5 @@ static void __exit thermal_exit(void)
 	mutex_destroy(&thermal_governor_lock);
 }
 
-core_initcall(thermal_init);
+fs_initcall(thermal_init);
 module_exit(thermal_exit);
