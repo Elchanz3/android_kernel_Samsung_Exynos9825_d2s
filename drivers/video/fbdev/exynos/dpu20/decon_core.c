@@ -61,6 +61,7 @@
 #include "./panels/lcd_ctrl.h"
 #include "../../../../dma-buf/sync_debug.h"
 #include "dpp.h"
+#include <linux/devfreq_boost.h>
 #if defined(CONFIG_EXYNOS_DISPLAYPORT)
 #include "displayport.h"
 #endif
@@ -625,8 +626,8 @@ int _decon_enable(struct decon_device *decon, enum decon_state state)
 		return 0;
 	}
 
-	pm_stay_awake(decon->dev);
-	dev_warn(decon->dev, "pm_stay_awake");
+	pm_wakeup_event(decon->dev, 500);
+	dev_warn(decon->dev, "wakelock held for 500ms");
 
 #if defined(CONFIG_EXYNOS_BTS)
 	decon->bts.ops->bts_acquire_bw(decon);
@@ -957,9 +958,6 @@ int _decon_disable(struct decon_device *decon, enum decon_state state)
 	diff_time = ktime_to_us(ktime_sub(ktime_get(), s_time));
 	decon_info("%s: elapsed time to disable dsim: %lldusec\n", __func__, diff_time);
 #endif
-
-	pm_relax(decon->dev);
-	dev_warn(decon->dev, "pm_relax");
 
 	if (decon->dt.psr_mode != DECON_VIDEO_MODE) {
 		if (decon->res.pinctrl && decon->res.hw_te_off) {
@@ -2952,6 +2950,7 @@ static int decon_set_win_config(struct decon_device *decon,
 
 	num_of_window = decon_get_active_win_count(decon, win_data);
 	if (num_of_window) {
+	    devfreq_boost_kick_max(DEVFREQ_EXYNOS_MIF, 70);
 		win_data->retire_fence = decon_create_fence(decon, &sync_file);
 		if (win_data->retire_fence < 0)
 			goto err_prepare;
@@ -2977,6 +2976,7 @@ static int decon_set_win_config(struct decon_device *decon,
 			sizeof(struct decon_rect));
 
 	if (num_of_window) {
+		devfreq_boost_kick_max(DEVFREQ_EXYNOS_MIF, 70);
 		decon_create_release_fences(decon, win_data, sync_file);
 #if !defined(CONFIG_SUPPORT_LEGACY_FENCE)
 		regs->retire_fence = dma_fence_get(sync_file->fence);
@@ -4441,8 +4441,8 @@ static int decon_create_update_thread(struct decon_device *decon, char *name)
 	decon->up_list_saved = false;
 	atomic_set(&decon->up.remaining_frame, 0);
 	kthread_init_worker(&decon->up.worker);
-	decon->up.thread = kthread_run(kthread_worker_fn,
-			&decon->up.worker, name);
+	decon->up.thread = kthread_run_perf_critical(cpu_prime_mask,
+			kthread_worker_fn, &decon->up.worker, name);
 	if (IS_ERR(decon->up.thread)) {
 		decon->up.thread = NULL;
 		decon_err("failed to run update_regs thread\n");
@@ -4537,8 +4537,8 @@ static int decon_initial_display(struct decon_device *decon, bool is_colormap)
 
 	fbinfo = decon->win[decon->dt.dft_win]->fbinfo;
 
-	pm_stay_awake(decon->dev);
-	dev_warn(decon->dev, "pm_stay_awake");
+	pm_wakeup_event(decon->dev, 500);
+	dev_warn(decon->dev, "wakelock held for 500ms");
 
 	if (decon->dt.psr_mode != DECON_VIDEO_MODE) {
 		if (decon->res.pinctrl && decon->res.hw_te_on) {

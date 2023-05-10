@@ -129,7 +129,7 @@ static int exynos_devfreq_get_dev_status(struct device *dev, struct devfreq_dev_
 	stat->total_time = data->um_data.val_ccnt;
 	stat->delta_time = data->last_monitor_period;
 
-	data->last_um_usage_rate = div64_u64(stat->busy_time * 120, stat->total_time);
+	data->last_um_usage_rate = div64_u64(stat->busy_time * 100, stat->total_time);
 
 	for (i = 0; i < data->um_data.um_count; i++) {
 		exynos_reset_ppc(data->um_data.va_base[i]);

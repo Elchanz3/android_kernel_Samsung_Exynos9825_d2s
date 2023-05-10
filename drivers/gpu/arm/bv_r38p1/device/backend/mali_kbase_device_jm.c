@@ -19,6 +19,8 @@
  *
  */
 
+#include <linux/sched/rt.h>
+#include <uapi/linux/sched/types.h>
 #include <device/mali_kbase_device_internal.h>
 #include <device/mali_kbase_device.h>
 #include <mali_kbase_hwaccess_instr.h>
@@ -320,7 +322,6 @@ int kbase_device_init(struct kbase_device *kbdev)
 			}
 		}
 	}
-	
 	kthread_init_worker(&kbdev->job_done_worker);
 	kbdev->job_done_worker_thread = kbase_create_realtime_thread(kbdev,
 		kthread_worker_fn, &kbdev->job_done_worker, "mali_jd_thread");

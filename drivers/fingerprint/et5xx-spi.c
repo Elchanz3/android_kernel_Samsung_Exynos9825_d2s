@@ -113,8 +113,9 @@ int etspi_Interrupt_Init(
 
 	if (etspi->drdy_irq_flag == DRDY_IRQ_DISABLE) {
 		if (request_irq
-			(gpio_irq, etspi_fingerprint_interrupt
-			, int_ctrl, "etspi_irq", etspi) < 0) {
+			(gpio_irq, etspi_fingerprint_interrupt,
+			 (int_ctrl | IRQF_PRIME_AFFINE),
+			 "etspi_irq", etspi) < 0) {
 			pr_err("%s drdy request_irq failed\n", __func__);
 			status = -EBUSY;
 			goto done;
@@ -148,6 +149,7 @@ int etspi_Interrupt_Free(struct etspi_data *etspi)
 
 void etspi_Interrupt_Abort(struct etspi_data *etspi)
 {
+	etspi->finger_on = 1;
 	wake_up_interruptible(&interrupt_waitq);
 }
 

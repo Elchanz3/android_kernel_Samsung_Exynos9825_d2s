@@ -62,14 +62,18 @@
 #include <linux/random.h>
 #include <linux/rcuwait.h>
 #include <linux/compat.h>
+#include <linux/sysfs.h>
 #include <linux/cpufreq_times.h>
 #include <linux/ems.h>
-#include <linux/sysfs.h>
 
 #include <linux/uaccess.h>
 #include <asm/unistd.h>
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
+
+#ifdef CONFIG_SECURITY_DEFEX
+#include <linux/defex.h>
+#endif
 
 /*
  * The default value should be high enough to not crash a system that randomly
@@ -234,14 +238,6 @@ void release_task(struct task_struct *p)
 {
 	struct task_struct *leader;
 	int zap_leader;
-
-	if (p->fpack) {
-		if (p->fpack->iname)
-			__putname(p->fpack->iname);
-		kfree(p->fpack);
-		p->fpack = NULL;
-	}
-
 repeat:
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials. But shut RCU-lockdep up */

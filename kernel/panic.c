@@ -28,10 +28,11 @@
 #include <linux/console.h>
 #include <linux/bug.h>
 #include <linux/ratelimit.h>
+#include <linux/sysfs.h>
 #include <linux/debug-snapshot.h>
 
 #ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
-#include <linux/sysfs.h>
+#include <linux/sec_debug.h>
 #endif
 
 #define PANIC_TIMER_STEP 100
@@ -264,7 +265,7 @@ void panic(const char *fmt, ...)
 #endif
 #ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
 	if (strncmp(buf, "Fatal exception", 15))
-		(SIL_FAULT, (unsigned long)regs.pc, &regs);
+		sec_debug_set_extra_info_fault(PANIC_FAULT, (unsigned long)regs.pc, &regs);
 #endif
 	pr_auto(ASL5, "Kernel panic - not syncing: %s\n", buf);
 

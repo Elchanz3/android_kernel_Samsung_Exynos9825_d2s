@@ -28,19 +28,6 @@ config SUSPEND_SKIP_SYNC
 	  of suspend, or they are content with invoking sync() from
 	  user-space before invoking suspend.  Say Y if that's your case.
 
-config POWERSUSPEND
-	bool "Power suspend"
-	default y
-	---help---
-	  Call early suspend handlers when the user requested sleep state
-	  changes.
-
-config POWERSUSPEND_DEBUG
-	bool "Powersuspend driver debugging code"
-	depends on POWERSUSPEND
-	help
-	  Output debugging info in dmesg [POWERSUSPEND] (Yank555.lu)
-
 config HIBERNATE_CALLBACKS
 	bool
 
@@ -325,35 +312,6 @@ config PM_GENERIC_DOMAINS_OF
 
 config CPU_PM
 	bool
-
-config ENERGY_MODEL
-	bool "Energy Model for CPUs"
-	depends on SMP
-	depends on CPU_FREQ
-	default n
-	help
-	  Several subsystems (thermal and/or the task scheduler for example)
-	  can leverage information about the energy consumed by CPUs to make
-	  smarter decisions. This config option enables the framework from
-	  which subsystems can access the energy models.
-
-	  The exact usage of the energy model is subsystem-dependent.
-
-	  If in doubt, say N.
-
-config FOTA_LIMIT
-	bool "Fota limit information node"
-	default n
-	help
-	  Add sysfs to notify limit information to recovery module
-	  /sys/power/fota_limit
-
-config SEC_PERF_BIG_AFFINITY_RESUME
-        bool "resume process set affinity to big CPUs"
-	default n
-	help
-	  need to decrease resume time
-	  set big affinity to resume process
 
 config BOEFFLA_WL_BLOCKER
 	bool "Boeffla generic wakelock blocker driver"

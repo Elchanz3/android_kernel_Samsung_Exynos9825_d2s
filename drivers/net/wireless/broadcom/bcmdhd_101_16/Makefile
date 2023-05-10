@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2021, Broadcom.
+# Copyright (C) 2022, Broadcom.
 #
 #      Unless you and Broadcom execute a separate written software license
 # agreement governing use of this software, this software is licensed to you
@@ -24,7 +24,8 @@
 #####################
 
 DHDCFLAGS += -DBCMUTILS_ERR_CODES -DUSE_NEW_RSPEC_DEFS
-DHDCFLAGS += -Wall -Werror -Wstrict-prototypes -Dlinux -DLINUX -DBCMDRIVER      \
+DHDCFLAGS += -Dlinux -D__linux__ -DLINUX
+DHDCFLAGS += -Wall -Wstrict-prototypes -DBCMDRIVER      \
         -DBCMDONGLEHOST -DUNRELEASEDCHIP -DBCMDMA32 -DBCMFILEIMAGE      \
         -DDHDTHREAD -DDHD_BCMEVENTS -DSHOW_EVENTS -DWLP2P      \
         -DWIFI_ACT_FRAME -DARP_OFFLOAD_SUPPORT -DKEEP_ALIVE -DCSCAN     \
@@ -517,6 +518,8 @@ endif
 
 # NAN-Ranging BW private command
   DHDCFLAGS += -DSUPPORT_NAN_RANGING_TEST_BW
+# NAN customer discovery cache nubmer
+  DHDCFLAGS += -DCUSTOM_NAN_MAX_CACHE_DISC_RESULT=160
 
 ifeq ($(CONFIG_ARCH_QCOM),y)
 # Due to GKI config, Exynos has ARCH_QCOM & ARCH_EXYNOS, MSM has ARCH_QCOM only, Temporary solution
@@ -806,6 +809,8 @@ endif
  DHDCFLAGS += -DFLOW_RING_PREALLOC
 # NAN-Ranging BW private command
  DHDCFLAGS += -DSUPPORT_NAN_RANGING_TEST_BW
+# NAN customer discovery cache nubmer
+  DHDCFLAGS += -DCUSTOM_NAN_MAX_CACHE_DISC_RESULT=40
 
 ifeq ($(CONFIG_ARCH_QCOM),y)
 # Due to GKI config, Exynos has ARCH_QCOM & ARCH_EXYNOS, MSM has ARCH_QCOM only, Temporary solution
@@ -1831,31 +1836,24 @@ ifeq ($(CONFIG_ARCH_SDM845),y)
 endif
 ifeq ($(CONFIG_SOC_EXYNOS9820),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_SOC_EXYNOS9830),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_SOC_EXYNOS2100),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_SOC_EXYNOS1000),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_ARCH_SM8150),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_ARCH_KONA),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_ARCH_LAHAINA),y)
   DHDCFLAGS += -Wno-date-time
-  DHDCFLAGS += -Wno-sometimes-uninitialized
 endif
 ifeq ($(CONFIG_SOC_EXYNOS9110),y)
   DHDCFLAGS += -Wno-unused-const-variable

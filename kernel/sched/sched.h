@@ -25,6 +25,7 @@
 #include <linux/u64_stats_sync.h>
 #include <linux/kernel_stat.h>
 #include <linux/binfmts.h>
+#include <linux/bitops.h>
 #include <linux/mutex.h>
 #include <linux/psi.h>
 #include <linux/spinlock.h>
@@ -56,29 +57,11 @@ struct cpuidle_state;
 
 extern __read_mostly int scheduler_running;
 
-extern unsigned long capacity_curr_of(int cpu);
-
 extern unsigned long calc_load_update;
 extern atomic_long_t calc_load_tasks;
 
 extern void calc_global_load_tick(struct rq *this_rq);
 extern long calc_load_fold_active(struct rq *this_rq, long adjust);
-
-
-#ifdef CONFIG_HZ_300
-/*
- * Tick interval becomes to 3333333 due to
- * rounding error when HZ=300.
- */
-#define MIN_SCHED_RAVG_WINDOW (3333333 * 6)
-#else
-/* Min window size (in ns) = 20ms */
-#define MIN_SCHED_RAVG_WINDOW 20000000
-#endif
-
-/* Max window size (in ns) = 1s */
-#define MAX_SCHED_RAVG_WINDOW 1000000000
-extern unsigned int sched_ravg_window;
 
 #ifdef CONFIG_SMP
 extern void cpu_load_update_active(struct rq *this_rq);
@@ -217,6 +200,12 @@ static inline int task_has_rt_policy(struct task_struct *p)
 static inline int task_has_dl_policy(struct task_struct *p)
 {
 	return dl_policy(p->policy);
+}
+
+static inline void update_avg(u64 *avg, u64 sample)
+{
+	s64 diff = sample - *avg;
+	*avg += diff / 8;
 }
 
 /*
@@ -1320,7 +1309,7 @@ struct sched_group {
 	 * by attaching extra space to the end of the structure,
 	 * depending on how many CPUs the kernel has booted up with)
 	 */
-	unsigned long cpumask[0];
+	unsigned long cpumask[];
 };
 
 static inline struct cpumask *sched_group_span(struct sched_group *sg)
@@ -1951,8 +1940,6 @@ extern unsigned int sysctl_sched_use_walt_cpu_util;
 extern unsigned int walt_ravg_window;
 extern bool walt_disabled;
 
-extern unsigned long cpu_util(int cpu);
-
 #endif /* CONFIG_SMP */
 
 static inline void sched_rt_avg_update(struct rq *rq, u64 rt_delta)
@@ -2209,23 +2196,6 @@ struct _eenv_debug {
 	unsigned long cpu_util[1];
 };
 #endif
-
-/* EAS governors */
-#ifdef CONFIG_SMP
-struct sched_walt_cpu_load {
-	unsigned long prev_window_util;
-	unsigned long nl;
-	unsigned long pl;
-	u64 ws;
-};
-#endif
-
-#ifdef CONFIG_SCHED_WALT
-extern unsigned long
-boosted_cpu_util(int cpu, unsigned long other_util);
-#endif
-
-extern inline unsigned long cpu_util_freq(int cpu);
 
 struct eenv_cpu {
 	/* CPU ID, must be in cpus_mask */

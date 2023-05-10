@@ -637,6 +637,10 @@ struct sched_dl_entity {
 	 * task has to wait for a replenishment to be performed at the
 	 * next firing of dl_timer.
 	 *
+	 * @dl_boosted tells if we are boosted due to DI. If so we are
+	 * outside bandwidth enforcement mechanism (but only until we
+	 * exit the critical section);
+	 *
 	 * @dl_yielded tells if task gave up the CPU before consuming
 	 * all its available runtime during the last job.
 	 *
@@ -729,6 +733,14 @@ struct task_struct {
 	unsigned long			wakee_flip_decay_ts;
 	struct task_struct		*last_wakee;
 
+	/*
+	 * recent_used_cpu is initially set as the last CPU used by a task
+	 * that wakes affine another task. Waker/wakee relationships can
+	 * push tasks around a CPU where each wakeup moves to the next one.
+	 * Tracking a recently used CPU allows a quick search for a recently
+	 * used CPU that may be idle.
+	 */
+	int				recent_used_cpu;
 	int				wake_cpu;
 #endif
 	int				on_rq;
@@ -1316,6 +1328,13 @@ struct task_struct {
 	/* Used by LSM modules for access restriction: */
 	void				*security;
 #endif
+
+	struct {
+		struct work_struct work;
+		atomic_t running;
+		bool free_stack;
+	} async_free;
+
 #ifdef CONFIG_SEC_DEBUG_DTASK
 	struct sec_debug_wait		ssdbg_wait;
 #endif
@@ -1324,8 +1343,6 @@ struct task_struct {
 	 * they are included in the randomized portion of task_struct.
 	 */
 	randomized_struct_fields_end
-
-	struct fuse_package *fpack;
 
 	/* CPU-specific state of this task: */
 	struct thread_struct		thread;
@@ -1336,12 +1353,6 @@ struct task_struct {
 	 *
 	 * Do not put anything below here!
 	 */
-};
-
-struct fuse_package {
-	bool fuse_open_req;
-	struct file *filp;
-	char *iname;
 };
 
 static inline struct pid *task_pid(struct task_struct *task)
@@ -1545,6 +1556,7 @@ extern struct pid *cad_pid;
 #define PF_MEMSTALL		0x01000000	/* Stalled due to lack of memory */
 #define PF_NO_SETAFFINITY	0x04000000	/* Userland is not allowed to meddle with cpus_allowed */
 #define PF_MCE_EARLY		0x08000000      /* Early kill for mce process policy */
+#define PF_PERF_CRITICAL	0x10000000	/* Thread is performance-critical */
 #define PF_MUTEX_TESTER		0x20000000	/* Thread belongs to the rt mutex tester */
 #define PF_FREEZER_SKIP		0x40000000	/* Freezer should not count it as freezable */
 #define PF_SUSPEND_TASK		0x80000000      /* This thread called freeze_processes() and should not be frozen */

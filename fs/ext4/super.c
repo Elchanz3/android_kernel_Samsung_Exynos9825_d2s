@@ -4264,8 +4264,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed_mount2;
 	}
 
-	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
-	spin_lock_init(&sbi->s_next_gen_lock);
+	sbi->s_gdb_count = db_count;
 
 	setup_timer(&sbi->s_err_report, print_daily_error_info,
 		(unsigned long) sb);
@@ -4692,10 +4691,6 @@ failed_mount2:
 	kvfree(group_desc);
 	rcu_read_unlock();
 failed_mount:
-	if (!silent) {
-		printk(KERN_ERR "printing data of superblock-bh\n");
-		print_bh(sb, bh, 0, EXT4_BLOCK_SIZE(sb));
-	}
 	if (sbi->s_chksum_driver)
 		crypto_free_shash(sbi->s_chksum_driver);
 #ifdef CONFIG_QUOTA
@@ -6078,84 +6073,6 @@ static int ext4_get_next_id(struct super_block *sb, struct kqid *qid)
 	return dquot_get_next_id(sb, qid);
 }
 #endif
-
-void print_iloc_info(struct super_block *sb, struct ext4_iloc iloc)
-{
-	printk(KERN_ERR "iloc info, offset : %lu,", iloc.offset);
-	printk(KERN_ERR " group# : %u\n", iloc.block_group);
-	printk(KERN_ERR "sb info, inodes per group : %lu,",
-			EXT4_SB(sb)->s_inodes_per_group);
-	printk(KERN_ERR " inode size : %d\n", EXT4_SB(sb)->s_inode_size);
-	print_bh(sb, iloc.bh, 0, EXT4_BLOCK_SIZE(sb));
-}
-
-void print_bh(struct super_block *sb, struct buffer_head *bh
-		, int start, int len)
-{
-	if (ignore_fs_panic)
-		return;
-
-	if (bh) {
-		printk(KERN_ERR " print_bh: bh %p,"
-				" bh->b_size %lu, bh->b_data %p\n",
-				(void *) bh, (long unsigned int) bh->b_size,
-				(void *) bh->b_data);
-		print_block_data(sb, bh->b_blocknr, bh->b_data, start, len);
-	} else {
-		printk(KERN_ERR " print_bh: bh is null!\n");
-	}
-}
-
-void print_block_data(struct super_block *sb, sector_t blocknr,
-		unsigned char *data_to_dump, int start, int len)
-{
-	int i, j;
-	int bh_offset = (start / 16) * 16;
-	char row_data[17] = { 0, };
-	char row_hex[50] = { 0, };
-	char ch;
-	struct mount *m = NULL;
-
-	printk(KERN_ERR "As EXT4-fs error, printing data in hex\n");
-	printk(KERN_ERR " [partition info] s_id : %s, start sector# : %lu\n",
-			sb->s_id,
-			(long unsigned int) sb->s_bdev->bd_part->start_sect);
-	printk(KERN_ERR " dump block# : %lu, start offset(byte) : %d\n",
-			(long unsigned int) blocknr, start);
-	printk(KERN_ERR " length(byte) : %d, data_to_dump 0x%p\n",
-			len, (void *)data_to_dump);
-	if (!list_empty(&sb->s_mounts)) {
-		m = list_first_entry(&sb->s_mounts, struct mount, mnt_instance);
-		if (m)
-			printk(KERN_ERR " mountpoint : %s\n",
-				m->mnt_mountpoint->d_name.name);
-	}
-	printk(KERN_ERR "-------------------------------------------------\n");
-
-	for (i = 0; i < (len + 15) / 16; i++) {
-		for (j = 0; j < 16; j++) {
-			ch = *(data_to_dump + bh_offset + j);
-			if (start <= bh_offset + j
-					&& start + len > bh_offset + j) {
-
-				if (isascii(ch) && isprint(ch))
-					sprintf(row_data + j, "%c", ch);
-				else
-					sprintf(row_data + j, ".");
-
-				sprintf(row_hex + (j * 3), "%2.2x ", ch);
-			} else {
-				sprintf(row_data + j, " ");
-				sprintf(row_hex + (j * 3), "-- ");
-			}
-		}
-
-		printk(KERN_ERR "0x%4.4x : %s | %s\n",
-			bh_offset, row_hex, row_data);
-		bh_offset += 16;
-	}
-	printk(KERN_ERR "-------------------------------------------------\n");
-}
 
 static struct dentry *ext4_mount(struct file_system_type *fs_type, int flags,
 		       const char *dev_name, void *data)

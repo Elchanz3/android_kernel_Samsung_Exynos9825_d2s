@@ -350,7 +350,6 @@ out:
 		if (!fatal)
 			fatal = err;
 	} else {
-		print_bh(sb, bitmap_bh, 0, EXT4_BLOCK_SIZE(sb));
 		ext4_error(sb, "bit already cleared for inode %lu", ino);
 		if (gdp && !EXT4_MB_GRP_IBITMAP_CORRUPT(grp)) {
 			int count;
@@ -1152,9 +1151,7 @@ got:
 			   inode->i_ino);
 		goto out;
 	}
-	spin_lock(&sbi->s_next_gen_lock);
-	inode->i_generation = sbi->s_next_generation++;
-	spin_unlock(&sbi->s_next_gen_lock);
+	inode->i_generation = prandom_u32();
 
 	/* Precompute checksum seed for inode metadata */
 	if (ext4_has_metadata_csum(sb)) {

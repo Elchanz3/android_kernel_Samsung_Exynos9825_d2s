@@ -1,7 +1,7 @@
 /*
  * Linux platform device for DHD WLAN adapter
  *
- * Copyright (C) 2021, Broadcom.
+ * Copyright (C) 2022, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -865,7 +865,7 @@ static int dhd_wifi_platform_load_usb(void)
 	return 0;
 }
 
-static int dhd_wifi_platform_load(void)
+static int dhd_wifi_platform_load()
 {
 	int err = 0;
 

@@ -1,7 +1,7 @@
 /*
  * Linux cfg80211 driver - Dongle Host Driver (DHD) related
  *
- * Copyright (C) 2021, Broadcom.
+ * Copyright (C) 2022, Broadcom.
  *
  *      Unless you and Broadcom execute a separate written software license
  * agreement governing use of this software, this software is licensed to you
@@ -148,12 +148,12 @@ static bool btcoex_is_sco_active(struct net_device *dev)
 
 		ioc_res = dev_wlc_intvar_get_reg(dev, "btc_params", 27, &param27);
 
-		WL_TRACE(("sample[%d], btc params: 27:%x\n", i, param27));
-
 		if (ioc_res < 0) {
 			WL_ERR(("ioc read btc params error\n"));
 			break;
 		}
+
+		WL_TRACE(("sample[%d], btc params: 27:%x\n", i, param27));
 
 		if ((param27 & 0x6) == 2) { /* count both sco & esco  */
 			sco_id_cnt++;
@@ -432,7 +432,7 @@ void* wl_cfg80211_btcoex_init(struct net_device *ndev)
 	return btco_inf;
 }
 
-void wl_cfg80211_btcoex_kill_handler(void)
+void wl_cfg80211_btcoex_kill_handler()
 {
 	if (!btcoex_info_loc)
 		return;
@@ -445,7 +445,7 @@ void wl_cfg80211_btcoex_kill_handler(void)
 	wl_cfg80211_btcoex_init_handler_status();
 }
 
-void wl_cfg80211_btcoex_deinit(void)
+void wl_cfg80211_btcoex_deinit()
 {
 	if (!btcoex_info_loc)
 		return;

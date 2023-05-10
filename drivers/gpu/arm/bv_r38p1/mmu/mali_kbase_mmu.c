@@ -25,6 +25,7 @@
 
 #include <linux/kernel.h>
 #include <linux/dma-mapping.h>
+#include <linux/swap.h>
 #include <mali_kbase.h>
 #include <gpu/mali_kbase_gpu_fault.h>
 #include <gpu/mali_kbase_gpu_regmap.h>
