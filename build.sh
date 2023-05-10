@@ -15,6 +15,8 @@ BUILD_CROSS_COMPILE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64
 KERNEL_LLVM_BIN=/home/chanz22/Downloads/Clang-17.0.0-20230419/bin/clang
 CLANG_TRIPLE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
 
+echo "now wait and see the magic..."
+
 DATE_START=$(date +"%s")
 
 make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN exynos9820-d2s_defconfig
@@ -29,7 +31,7 @@ $(pwd)/tools/mkdtimg cfg_create $(pwd)/out/dtb.img dt.configs/exynos9820.cfg -d 
 
 IMAGE="out/arch/arm64/boot/Image"
 if [[ -f "$IMAGE" ]]; then
-        KERNELZIP="WeiBokernel-$(date +"%Y%m%d%H%M").zip"
+        KERNELZIP="WeiBokernel-$((srctree)/scripts/setlocalversion)).zip"
 	rm AnyKernel3/zImage > /dev/null 2>&1
 	rm AnyKernel3/dtb > /dev/null 2>&1
 	rm AnyKernel3/*.zip > /dev/null 2>&1
@@ -42,5 +44,7 @@ if [[ -f "$IMAGE" ]]; then
 	DIFF=$(($DATE_END - $DATE_START))
 
 	echo -e "\nTime elapsed: $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds.\n"
+	
+	echo "sucessfully compiled now look at Anykernel3 folder to find ur zip!"
 
 fi
