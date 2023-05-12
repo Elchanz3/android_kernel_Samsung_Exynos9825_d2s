@@ -617,9 +617,7 @@ retry:
 			acpm_ramdump();
 
 			dump_stack();
-#ifdef CONFIG_DEBUG_SNAPSHOT_WATCHDOG_RESET
 			s3c2410wdt_set_emergency_reset(0, 0);
-#endif
 		}
 
 		if (!is_acpm_stop_log)

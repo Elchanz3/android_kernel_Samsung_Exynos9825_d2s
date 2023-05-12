@@ -29,9 +29,7 @@
 /*
  * Timeout for stopping processes
  */
-
-unsigned int __read_mostly freeze_timeout_msecs =
-	IS_ENABLED(CONFIG_ANDROID) ? MSEC_PER_SEC : 20 * MSEC_PER_SEC; //5
+unsigned int __read_mostly freeze_timeout_msecs = 5 * MSEC_PER_SEC;    // 10
 
 static int try_to_freeze_tasks(bool user_only)
 {
@@ -46,7 +44,7 @@ static int try_to_freeze_tasks(bool user_only)
 #ifdef CONFIG_PM_SLEEP
 	char suspend_abort[MAX_SUSPEND_ABORT_LEN];
 #endif
-	char *sys_state[SYSTEM_END] __maybe_unused = {
+	char *sys_state[SYSTEM_END] = {
 		"BOOTING",
 		"SCHEDULING",
 		"RUNNING",

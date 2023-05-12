@@ -91,7 +91,6 @@
 #include <linux/livepatch.h>
 #include <linux/thread_info.h>
 #include <linux/cpufreq_times.h>
-#include <linux/devfreq_boost.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -345,7 +344,7 @@ static void account_kernel_stack(struct task_struct *tsk, int account)
 	}
 }
 
-void release_task_stack(struct task_struct *tsk)
+static void release_task_stack(struct task_struct *tsk)
 {
 	if (WARN_ON(tsk->state != TASK_DEAD))
 		return;  /* Better to leak the stack than to free prematurely */
@@ -951,69 +950,14 @@ static inline void __mmput(struct mm_struct *mm)
 }
 
 /*
- * Store pids of zygote and zygote64.
- * Both processes uses "main" as its comm.
- */
-static pid_t zygote_pids[2];
-
-bool is_app(struct task_struct *p)
-{
-	struct task_struct *parent;
-
-	parent = rcu_dereference(p->real_parent);
-
-	if (parent->pid == zygote_pids[0])
-		return true;
-
-	if (parent->pid == zygote_pids[1])
-		return true;
-
-	if (zygote_pids[0] && zygote_pids[1])
-		return false;
-
-	if (strncmp(parent->comm, "main", 4) == 0) {
-		if (!zygote_pids[0]) {
-			zygote_pids[0] = parent->pid;
-			pr_info("set zygote_pids[0]=%d", parent->pid);
-			return true;
-		}
-		if (!zygote_pids[1]) {
-			zygote_pids[1] = parent->pid;
-			pr_info("set zygote_pids[1]=%d", parent->pid);
-			return true;
-		}
-	}
-	return false;
-}
-
-void (*on_app_mmput_callback)(void);
-
-void call_on_app_mmput_callback(void)
-{
-	if (on_app_mmput_callback) {
-		on_app_mmput_callback();
-	}
-}
-
-void register_on_app_mmput_callback(void (*callback)(void))
-{
-	on_app_mmput_callback = callback;
-}
-EXPORT_SYMBOL_GPL(register_on_app_mmput_callback);
-
-/*
  * Decrement the use count and release all resources for an mm.
  */
 void mmput(struct mm_struct *mm)
 {
 	might_sleep();
 
-	if (atomic_dec_and_test(&mm->mm_users)) {
+	if (atomic_dec_and_test(&mm->mm_users))
 		__mmput(mm);
-		if (is_app(current)) {
-			call_on_app_mmput_callback();
-		}
-	}
 }
 EXPORT_SYMBOL_GPL(mmput);
 
@@ -2191,7 +2135,6 @@ struct task_struct *fork_idle(int cpu)
 	return task;
 }
 
-extern int kp_active_mode(void);
 /*
  *  Ok, this is the main fork-routine.
  *
@@ -2208,9 +2151,6 @@ long _do_fork(unsigned long clone_flags,
 	struct task_struct *p;
 	int trace = 0;
 	long nr;
-
-    if (task_is_zygote(current))
-		devfreq_boost_kick_max(DEVFREQ_EXYNOS_MIF, 50);
 
 	/*
 	 * Determine whether and which event to report to ptracer.  When

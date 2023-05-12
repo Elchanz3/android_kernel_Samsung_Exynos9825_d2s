@@ -134,6 +134,7 @@ bool osq_lock(struct optimistic_spin_queue *lock)
 	 * cmpxchg in an attempt to undo our queueing.
 	 */
 
+
 	/*
 	 * Wait to acquire the lock or cancelation. Note that need_resched()
 	 * will come with an IPI, which will wake smp_cond_load_relaxed() if it
@@ -143,6 +144,8 @@ bool osq_lock(struct optimistic_spin_queue *lock)
 	if (smp_cond_load_relaxed(&node->locked, VAL || need_resched() ||
 				  vcpu_is_preempted(node_cpu(node->prev))))
 		return true;
+
+	/* unqueue */
 
 	/*
 	 * Step - A  -- stabilize @prev

@@ -749,7 +749,7 @@ static void context_struct_compute_av(struct context *scontext,
 				 tclass, avd);
 }
 
-static inline int security_validtrans_handle_fail(struct context *ocontext,
+static int security_validtrans_handle_fail(struct context *ocontext,
 					   struct context *ncontext,
 					   struct context *tcontext,
 					   u16 tclass)
@@ -1537,7 +1537,7 @@ int security_context_to_sid_force(const char *scontext, u32 scontext_len,
 					    sid, SECSID_NULL, GFP_KERNEL, 1);
 }
 
-static inline int compute_sid_handle_invalid_context(
+static int compute_sid_handle_invalid_context(
 	struct context *scontext,
 	struct context *tcontext,
 	u16 tclass,
@@ -1858,10 +1858,8 @@ static int clone_sid(u32 sid,
 
 static inline int convert_context_handle_invalid_context(struct context *context)
 {
-#ifdef CONFIG_AUDIT
 	char *s;
 	u32 len;
-#endif
 
 // [ SEC_SELINUX_PORTING_COMMON
 #ifdef CONFIG_ALWAYS_ENFORCE
@@ -1871,12 +1869,10 @@ static inline int convert_context_handle_invalid_context(struct context *context
 	if (selinux_enforcing)
 		return -EINVAL;
 
-#ifdef CONFIG_AUDIT
 	if (!context_struct_to_string(context, &s, &len)) {
 		printk(KERN_WARNING "SELinux:  Context %s would be invalid if enforcing\n", s);
 		kfree(s);
 	}
-#endif
 	return 0;
 }
 
@@ -1904,10 +1900,8 @@ static int convert_context(u32 key,
 	struct type_datum *typdatum;
 	struct user_datum *usrdatum;
 	char *s;
-	int rc = 0;
-#ifdef CONFIG_AUDIT
 	u32 len;
-#endif
+	int rc = 0;
 
 	if (key <= SECINITSID_NUM)
 		goto out;
@@ -2020,7 +2014,6 @@ static int convert_context(u32 key,
 out:
 	return rc;
 bad:
-#ifdef CONFIG_AUDIT
 	/* Map old representation to string and save it. */
 	rc = context_struct_to_string(&oldc, &s, &len);
 	if (rc)
@@ -2033,9 +2026,6 @@ bad:
 	       c->str);
 	rc = 0;
 	goto out;
-#else
-	return 0;
-#endif
 }
 
 static void security_load_policycaps(void)

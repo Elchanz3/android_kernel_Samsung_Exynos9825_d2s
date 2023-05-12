@@ -24,7 +24,6 @@ menuconfig MALI_DDK_VERSION
 choice
 	prompt "version Configuration"
 	depends on MALI_DDK_VERSION
-	default MALI_BIFROST_R38P1 if ANDROID_VERSION >= "130000"
 	default MALI_BIFROST_R32P1 if ANDROID_VERSION >= "120000"
 	default MALI_BIFROST_R26P0 if ANDROID_VERSION = "110000"
 	default MALI_BIFROST_R19P0_Q if ANDROID_VERSION = "100000"
@@ -59,10 +58,6 @@ config MALI_BIFROST_R26P0
 config MALI_BIFROST_R32P1
 	depends on MALI_DDK_VERSION
 	bool "Bifrost r32p1 driver for Android S"
-
-config MALI_BIFROST_R38P1
-	depends on MALI_DDK_VERSION
-	bool "Bifrost r38p1 driver for Android T"
 endchoice
 
 if MALI_BIFROST_R10P0
@@ -91,10 +86,6 @@ endif
 
 if MALI_BIFROST_R32P1
 source "drivers/gpu/arm/bv_r32p1/Kconfig"
-endif
-
-if MALI_BIFROST_R38P1
-source "drivers/gpu/arm/bv_r38p1/Kconfig"
 endif
 
 endmenu

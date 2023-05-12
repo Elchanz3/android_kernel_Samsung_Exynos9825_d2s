@@ -535,32 +535,27 @@ void resched_cpu(int cpu)
  */
 int get_nohz_timer_target(void)
 {
-	int i, cpu = smp_processor_id(), default_cpu = -1;
+	int i, cpu = smp_processor_id();
 	struct sched_domain *sd;
 
-	if (is_housekeeping_cpu(cpu)) {
-		if (!idle_cpu(cpu))
-			return cpu;
-		default_cpu = cpu;
-	}
+	if (!idle_cpu(cpu) && is_housekeeping_cpu(cpu))
+		return cpu;
 
 	rcu_read_lock();
 	for_each_domain(cpu, sd) {
-		for_each_cpu_and(i, sched_domain_span(sd),
-			housekeeping_cpumask()) {
+		for_each_cpu(i, sched_domain_span(sd)) {
 			if (cpu == i)
 				continue;
 
-			if (!idle_cpu(i)) {
+			if (!idle_cpu(i) && is_housekeeping_cpu(i)) {
 				cpu = i;
 				goto unlock;
 			}
 		}
 	}
 
-	if (default_cpu == -1)
-		default_cpu = housekeeping_any_cpu();
-	cpu = default_cpu;
+	if (!is_housekeeping_cpu(cpu))
+		cpu = housekeeping_any_cpu();
 unlock:
 	rcu_read_unlock();
 	return cpu;
@@ -1119,11 +1114,6 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 	struct rq *rq;
 	int ret = 0;
 
-	/* Don't allow perf-critical threads to have non-perf affinities */
-	if ((p->flags & PF_PERF_CRITICAL) && new_mask != cpu_lp_mask &&
-	    new_mask != cpu_perf_mask && new_mask != cpu_prime_mask)
-		return -EINVAL;
-
 	rq = task_rq_lock(p, &rf);
 	update_rq_clock(rq);
 
@@ -1622,6 +1612,12 @@ int select_task_rq(struct task_struct *p, int cpu, int sd_flags, int wake_flags,
 	return cpu;
 }
 
+static void update_avg(u64 *avg, u64 sample)
+{
+	s64 diff = sample - *avg;
+	*avg += diff >> 3;
+}
+
 void sched_set_stop_task(int cpu, struct task_struct *stop)
 {
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 1 };
@@ -1674,16 +1670,16 @@ ttwu_stat(struct task_struct *p, int cpu, int wake_flags)
 
 #ifdef CONFIG_SMP
 	if (cpu == rq->cpu) {
-		__schedstat_inc(rq->ttwu_local);
-		__schedstat_inc(p->se.statistics.nr_wakeups_local);
+		schedstat_inc(rq->ttwu_local);
+		schedstat_inc(p->se.statistics.nr_wakeups_local);
 	} else {
 		struct sched_domain *sd;
 
-		__schedstat_inc(p->se.statistics.nr_wakeups_remote);
+		schedstat_inc(p->se.statistics.nr_wakeups_remote);
 		rcu_read_lock();
 		for_each_domain(rq->cpu, sd) {
 			if (cpumask_test_cpu(cpu, sched_domain_span(sd))) {
-				__schedstat_inc(sd->ttwu_wake_remote);
+				schedstat_inc(sd->ttwu_wake_remote);
 				break;
 			}
 		}
@@ -1691,14 +1687,14 @@ ttwu_stat(struct task_struct *p, int cpu, int wake_flags)
 	}
 
 	if (wake_flags & WF_MIGRATED)
-		__schedstat_inc(p->se.statistics.nr_wakeups_migrate);
+		schedstat_inc(p->se.statistics.nr_wakeups_migrate);
 #endif /* CONFIG_SMP */
 
-	__schedstat_inc(rq->ttwu_count);
-	__schedstat_inc(p->se.statistics.nr_wakeups);
+	schedstat_inc(rq->ttwu_count);
+	schedstat_inc(p->se.statistics.nr_wakeups);
 
 	if (wake_flags & WF_SYNC)
-		__schedstat_inc(p->se.statistics.nr_wakeups_sync);
+		schedstat_inc(p->se.statistics.nr_wakeups_sync);
 }
 
 static inline void ttwu_activate(struct rq *rq, struct task_struct *p, int en_flags)
@@ -2555,7 +2551,6 @@ void wake_up_new_task(struct task_struct *p)
 	 * Use __set_task_cpu() to avoid calling sched_class::migrate_task_rq,
 	 * as we're not fully set-up yet.
 	 */
-	p->recent_used_cpu = task_cpu(p);
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), SD_BALANCE_FORK, 0, 1));
 #endif
 	rq = __task_rq_lock(p, &rf);
@@ -2695,50 +2690,6 @@ prepare_task_switch(struct rq *rq, struct task_struct *prev,
 	prepare_arch_switch(next);
 }
 
-void release_task_stack(struct task_struct *tsk);
-static void task_async_free(struct work_struct *work)
-{
-	struct task_struct *t = container_of(work, typeof(*t), async_free.work);
-	bool free_stack = READ_ONCE(t->async_free.free_stack);
-
-	atomic_set(&t->async_free.running, 0);
-
-	if (free_stack) {
-		release_task_stack(t);
-		put_task_struct(t);
-	} else {
-		__put_task_struct(t);
-	}
-}
-
-static void finish_task_switch_dead(struct task_struct *prev)
-{
-	if (atomic_cmpxchg(&prev->async_free.running, 0, 1)) {
-		put_task_stack(prev);
-		put_task_struct(prev);
-		return;
-	}
-
-	if (atomic_dec_and_test(&prev->stack_refcount)) {
-		prev->async_free.free_stack = true;
-	} else if (atomic_dec_and_test(&prev->usage)) {
-		prev->async_free.free_stack = false;
-	} else {
-		atomic_set(&prev->async_free.running, 0);
-		return;
-	}
-
-	INIT_WORK(&prev->async_free.work, task_async_free);
-	queue_work(system_unbound_wq, &prev->async_free.work);
-}
-
-static void mmdrop_async_free(struct work_struct *work)
-{
-	struct mm_struct *mm = container_of(work, typeof(*mm), async_put_work);
-
-	__mmdrop(mm);
-}
-
 /**
  * finish_task_switch - clean up after a task-switch
  * @prev: the thread we just switched away from.
@@ -2811,10 +2762,8 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 	finish_arch_post_lock_switch();
 
 	fire_sched_in_preempt_notifiers(current);
-	if (mm && atomic_dec_and_test(&mm->mm_count)) {
-		INIT_WORK(&mm->async_put_work, mmdrop_async_free);
-		queue_work(system_unbound_wq, &mm->async_put_work);
-	}
+	if (mm)
+		mmdrop(mm);
 	if (unlikely(prev_state == TASK_DEAD)) {
 		if (prev->sched_class->task_dead)
 			prev->sched_class->task_dead(prev);
@@ -2825,7 +2774,10 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 		 */
 		kprobe_flush_task(prev);
 
-			finish_task_switch_dead(prev);
+		/* Task is done with its stack. */
+		put_task_stack(prev);
+
+		put_task_struct(prev);
 	}
 
 	tick_nohz_task_switch();

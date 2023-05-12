@@ -25,7 +25,6 @@
 #include <linux/u64_stats_sync.h>
 #include <linux/kernel_stat.h>
 #include <linux/binfmts.h>
-#include <linux/bitops.h>
 #include <linux/mutex.h>
 #include <linux/psi.h>
 #include <linux/spinlock.h>
@@ -218,12 +217,6 @@ static inline int task_has_rt_policy(struct task_struct *p)
 static inline int task_has_dl_policy(struct task_struct *p)
 {
 	return dl_policy(p->policy);
-}
-
-static inline void update_avg(u64 *avg, u64 sample)
-{
-	s64 diff = sample - *avg;
-	*avg += diff / 8;
 }
 
 /*
@@ -1327,7 +1320,7 @@ struct sched_group {
 	 * by attaching extra space to the end of the structure,
 	 * depending on how many CPUs the kernel has booted up with)
 	 */
-	unsigned long cpumask[];
+	unsigned long cpumask[0];
 };
 
 static inline struct cpumask *sched_group_span(struct sched_group *sg)
