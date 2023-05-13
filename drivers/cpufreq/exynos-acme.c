@@ -1370,8 +1370,8 @@ static int __init cpufreq_read_cpu_min_cl1(char *cpu_min_cl1)
 
 __setup("cpu_min_cl1=", cpufreq_read_cpu_min_cl1);
 
-/*Underclocking prime cores to 350 MHz*/
-unsigned long arg_cpu_min_cl2 = 450000; 
+/*Underclocking prime cores to 350MHz*/
+unsigned long arg_cpu_min_cl2 = 350000; 
 
 static __init int cpufreq_read_cpu_min_cl2(char *cpu_min_cl2)
 {
