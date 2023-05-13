@@ -17,8 +17,6 @@ CLANG_TRIPLE=/home/chanz22/Downloads/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-li
 
 DATE_START=$(date +"%s")
 
-curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-
 make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN exynos9820-d2s_defconfig
 make O=out ARCH=arm64 \
 	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
