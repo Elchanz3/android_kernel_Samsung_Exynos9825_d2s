@@ -68,8 +68,6 @@ struct snd_soc_dapm_widget *
 snd_soc_dapm_new_control_unlocked(struct snd_soc_dapm_context *dapm,
 			 const struct snd_soc_dapm_widget *widget);
 
-static unsigned int soc_dapm_read(struct snd_soc_dapm_context *dapm, int reg);
-
 /* dapm power sequences - make this per codec in the future */
 static int dapm_up_seq[] = {
 	[snd_soc_dapm_pre] = 0,
@@ -438,9 +436,6 @@ static int dapm_kcontrol_data_alloc(struct snd_soc_dapm_widget *widget,
 
 			snd_soc_dapm_add_path(widget->dapm, data->widget,
 					      widget, NULL, NULL);
-		} else if (e->reg != SND_SOC_NOPM) {
-			data->value = soc_dapm_read(widget->dapm, e->reg) &
-				      (e->mask << e->shift_l);
 		}
 		break;
 	default:
