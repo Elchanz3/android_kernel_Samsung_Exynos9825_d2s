@@ -43,27 +43,5 @@ if [[ -f "$IMAGE" ]]; then
 
 	echo -e "\nTime elapsed: $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds.\n"
 	
-echo "**********************************"
-echo "You want flash it to your device?"
-echo "(1) Yes"
-echo "(2) No"
-read -p "You want flash it to your device?: " install
-
-if [ $install == "1" ]; then
-	adb sideload /Anykernel/$KERNELZIP
 	
-echo "
-          Please connect your device into sideload mode and wait..
-"
-
-        ;;
-	esac
-
-elif [ $install == "2" ]; then
-	echo "done.."
-	
-	;;
-	esac
-
-
 fi
