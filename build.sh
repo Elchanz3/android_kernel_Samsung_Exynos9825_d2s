@@ -29,7 +29,7 @@ $(pwd)/tools/mkdtimg cfg_create $(pwd)/out/dtb.img dt.configs/exynos9820.cfg -d 
 
 IMAGE="out/arch/arm64/boot/Image"
 if [[ -f "$IMAGE" ]]; then
-        KERNELZIP="WeiBokernel-$(date +"%Y%m%d%H%M").zip"
+        KERNELZIP="WeiboKernel.zip"
 	rm AnyKernel3/zImage > /dev/null 2>&1
 	rm AnyKernel3/dtb > /dev/null 2>&1
 	rm AnyKernel3/*.zip > /dev/null 2>&1
@@ -42,5 +42,28 @@ if [[ -f "$IMAGE" ]]; then
 	DIFF=$(($DATE_END - $DATE_START))
 
 	echo -e "\nTime elapsed: $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds.\n"
+	
+echo "**********************************"
+echo "You want flash it to your device?"
+echo "(1) Yes"
+echo "(2) No"
+read -p "You want flash it to your device?: " install
+
+if [ $install == "1" ]; then
+	adb sideload /Anykernel/$KERNELZIP
+	
+echo "
+          Please connect your device into sideload mode and wait..
+"
+
+        ;;
+	esac
+
+elif [ $install == "2" ]; then
+	echo "done.."
+	
+	;;
+	esac
+
 
 fi
