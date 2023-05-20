@@ -2,6 +2,12 @@
 
 clear
 
+rm KernelSU
+
+gio trash KernelSU
+
+./setup-kernelsu.sh
+
 mkdir out
 
 DTB_DIR=$(pwd)/out/arch/arm64/boot/dts
