@@ -147,3 +147,4 @@ scripts/fmp/__pycache__/
 zImage
 *.zip
 dtb
+KernelSU
