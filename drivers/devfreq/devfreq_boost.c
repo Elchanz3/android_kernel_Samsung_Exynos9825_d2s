@@ -43,7 +43,7 @@ struct df_boost_drv {
 	struct notifier_block fb_notif;
 };
 
-static int devfreq_boost = 0;
+static int devfreq_boost = 1794000;
 module_param(devfreq_boost, int, 0644);
 
 static void devfreq_device_unboost(struct work_struct *work);
