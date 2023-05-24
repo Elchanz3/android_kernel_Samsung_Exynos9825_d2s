@@ -22,12 +22,6 @@ static void cpufreq_gov_performance_limits(struct cpufreq_policy *policy)
 	__cpufreq_driver_target(policy, policy->max, CPUFREQ_RELATION_H);
 }
 
-static struct cpufreq_governor cpufreq_gov_performance = {
-	.name		= "performance",
-	.owner		= THIS_MODULE,
-	.limits		= cpufreq_gov_performance_limits,
-};
-
 static int __init cpufreq_gov_performance_init(void)
 {
 	return cpufreq_register_governor(&cpufreq_gov_performance);
