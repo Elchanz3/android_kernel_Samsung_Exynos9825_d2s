@@ -32,7 +32,7 @@
 #include "exynos-acme.h"
 
 #define SUSTAINABLE_FREQ_MID 2002000
-#define SUSTAINABLE_FREQ_BIG 1820000
+#define SUSTAINABLE_FREQ_BIG 2340000
 /*********************************************************************
  *                          SYSFS INTERFACES                         *
  *********************************************************************/
