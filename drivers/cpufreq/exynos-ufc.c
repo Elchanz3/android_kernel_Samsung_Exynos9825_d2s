@@ -688,7 +688,7 @@ static ssize_t store_boost_mode_change(struct kobject *kobj, struct kobj_attribu
 }
 
 static struct kobj_attribute cpufreq_table =
-__ATTR(cpufreq_table, 0444 , show_cpufreq_table, NULL);
+__ATTR(cpufreq_table, 0644 , show_cpufreq_table, NULL);
 static struct kobj_attribute cpufreq_min_limit =
 __ATTR(cpufreq_min_limit, 0644,
 		show_cpufreq_min_limit, store_cpufreq_min_limit);
