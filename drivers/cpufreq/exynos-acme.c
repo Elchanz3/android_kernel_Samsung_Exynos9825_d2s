@@ -1335,7 +1335,7 @@ static int init_dm(struct exynos_cpufreq_domain *domain,
 	return register_exynos_dm_freq_scaler(domain->dm_type, dm_scaler);
 }
 
-static unsigned long arg_cpu_min_cl0 = 120000; /* min cpu freq 132MHz */
+static unsigned long arg_cpu_min_cl0 = 120000; /* min cpu freq 120MHz */
 
 static int __init cpufreq_read_cpu_min_cl0(char *cpu_min_cl0)
 {
@@ -1389,7 +1389,7 @@ static __init int cpufreq_read_cpu_min_cl2(char *cpu_min_cl2)
 __setup("cpu_min_cl2=", cpufreq_read_cpu_min_cl2);
 
 
-static unsigned long arg_cpu_max_cl0 = 2106000; /* max cpu freq 2116MHz */
+static unsigned long arg_cpu_max_cl0 = 2106000; /* max cpu freq 2106MHz */
 
 static int __init cpufreq_read_cpu_max_cl0(char *cpu_max_cl0)
 {
