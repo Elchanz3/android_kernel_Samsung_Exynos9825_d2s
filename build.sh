@@ -2,6 +2,17 @@
 
 clear
 
+# Variables
+DIR=`readlink -f .`;
+PARENT_DIR=`readlink -f ${DIR}/..`;
+
+DEFCONFIG_NAME=exynos9820-d2s_defconfig
+CHIPSET_NAME=universal9820
+VARIANT=d2s
+ARCH=arm64
+VERSION=WeiboKernel_${VARIANT}_v0.7
+LOG_FILE=compilation.log
+
 mkdir out
 
 DTB_DIR=$(pwd)/out/arch/arm64/boot/dts
@@ -17,10 +28,10 @@ CLANG_TRIPLE=/home/chanz22/toolchains/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-l
 
 DATE_START=$(date +"%s")
 
-make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN exynos9820-d2s_defconfig
+make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN $DEFCONFIG_NAME
 make O=out ARCH=arm64 \
 	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
-	CLANG_TRIPLE=$CLANG_TRIPLE -j8 2>&1 |tee ../compile-Weibo.log
+	CLANG_TRIPLE=$CLANG_TRIPLE -j8 2>&1 |tee ../$LOG_FILE
 
 # remove a previous kernel image
 rm $IMAGE &> /dev/null
@@ -29,7 +40,7 @@ $(pwd)/tools/mkdtimg cfg_create $(pwd)/out/dtb.img dt.configs/exynos9820.cfg -d 
 
 IMAGE="out/arch/arm64/boot/Image"
 if [[ -f "$IMAGE" ]]; then
-        KERNELZIP="WeiboKernel.zip"
+        KERNELZIP="$VERSION.zip"
 	rm AnyKernel3/zImage > /dev/null 2>&1
 	rm AnyKernel3/dtb > /dev/null 2>&1
 	rm AnyKernel3/*.zip > /dev/null 2>&1
