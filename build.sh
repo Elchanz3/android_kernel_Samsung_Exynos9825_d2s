@@ -10,7 +10,7 @@ DEFCONFIG_NAME=exynos9820-d2s_defconfig
 CHIPSET_NAME=universal9820
 VARIANT=d2s
 ARCH=arm64
-VERSION=WeiboKernel_${VARIANT}_v0.7
+VERSION=WeiboKernel_${VARIANT}_v0.8
 LOG_FILE=compilation.log
 
 mkdir out
