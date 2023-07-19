@@ -22,16 +22,16 @@ export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
 
-BUILD_CROSS_COMPILE=/home/chanz22/toolchains/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
-KERNEL_LLVM_BIN=/home/chanz22/toolchains/Clang-17.0.0/bin/clang
-CLANG_TRIPLE=/home/chanz22/toolchains/aarch64-zyc-linux-gnu-13/bin/aarch64-zyc-linux-gnu-
+BUILD_CROSS_COMPILE=/home/chanz22/Documentos/toolchains/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-
+KERNEL_LLVM_BIN=/home/chanz22/Documentos/toolchains/Clang-17.0.0-20230718/bin/clang
+CLANG_TRIPLE=/home/chanz22/Documentos/toolchains/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-
 
 DATE_START=$(date +"%s")
 
 make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN $DEFCONFIG_NAME
 make O=out ARCH=arm64 \
 	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
-	CLANG_TRIPLE=$CLANG_TRIPLE -j8 2>&1 |tee ../$LOG_FILE
+	CLANG_TRIPLE=$CLANG_TRIPLE -j12 2>&1 |tee ../$LOG_FILE
 
 # remove a previous kernel image
 rm $IMAGE &> /dev/null
