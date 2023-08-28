@@ -1106,6 +1106,8 @@ static unsigned int s3c24xx_serial_getclk(struct s3c24xx_uart_port *ourport,
 	unsigned int cnt, baud, quot, clk_sel, best_quot = 0;
 	int calc_deviation, deviation = (1 << 30) - 1;
 	int ret;
+	
+	struct clk *clk = ourport->clk;
 
 	clk_sel = (ourport->cfg->clk_sel) ? ourport->cfg->clk_sel :
 			ourport->info->def_clk_sel;
@@ -1113,7 +1115,7 @@ static unsigned int s3c24xx_serial_getclk(struct s3c24xx_uart_port *ourport,
 		if (!(clk_sel & (1 << cnt)))
 			continue;
 
-		rate = clk_get_rate(ourport->clk);
+		rate = clk_get_rate(clk);
 
 		if (ourport->src_clk_rate && rate != ourport->src_clk_rate)
 		{
@@ -1135,24 +1137,17 @@ static unsigned int s3c24xx_serial_getclk(struct s3c24xx_uart_port *ourport,
 		rate = clk_get_rate(clk);
 		if (!rate) {
 			dev_err(ourport->port.dev,
-				"Failed to get clock rate for %s.\n", clkname);
-			clk_put(clk);
+				"Failed to get clock rate for clk.\n");
 			continue;
 		}
 
-		if (ourport->info->has_divslot) {
-			unsigned long div = rate / req_baud;
-
-			/* The UDIVSLOT register on the newer UARTs allows us to
-			 * get a divisor adjustment of 1/16th on the baud clock.
-			 *
-			 * We don't keep the UDIVSLOT value (the 16ths we
-			 * calculated by not multiplying the baud by 16) as it
-			 * is easy enough to recalculate.
-			 */
-
-			quot = div / 16;
-			baud = rate / div;
+		if (calc_deviation < deviation) {
+			if (!IS_ERR(*best_clk))
+				clk_put(*best_clk);
+			*best_clk = ourport->clk;
+			best_quot = quot;
+			*clk_num = cnt;
+			deviation = calc_deviation;
 		} else {
 			quot = (rate + (8 * req_baud)) / (16 * req_baud);
 			baud = rate / (quot * 16);
