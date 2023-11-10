@@ -500,7 +500,6 @@ static int map_lookup_elem(union bpf_attr *attr)
 	int ufd = attr->map_fd;
 	struct bpf_map *map;
 	void *key, *value, *ptr;
-	char value_onstack[32];
 	u32 value_size;
 	struct fd f;
 	int err;
@@ -533,14 +532,10 @@ static int map_lookup_elem(union bpf_attr *attr)
 	else
 		value_size = map->value_size;
 
-	if (likely(value_size <= sizeof(value_onstack))) {
-		value = value_onstack;
-	} else {
-		err = -ENOMEM;
-		value = kmalloc(value_size, GFP_USER | __GFP_NOWARN);
-		if (!value)
-			goto free_key;
-	}
+	err = -ENOMEM;
+	value = kmalloc(value_size, GFP_USER | __GFP_NOWARN);
+	if (!value)
+		goto free_key;
 
 	if (map->map_type == BPF_MAP_TYPE_PERCPU_HASH ||
 	    map->map_type == BPF_MAP_TYPE_LRU_PERCPU_HASH) {
@@ -576,8 +571,7 @@ static int map_lookup_elem(union bpf_attr *attr)
 	err = 0;
 
 free_value:
-	if (unlikely(value != value_onstack))
-		kfree(value);
+	kfree(value);
 free_key:
 	kfree(key);
 err_put:
@@ -605,7 +599,6 @@ static int map_update_elem(union bpf_attr *attr)
 	int ufd = attr->map_fd;
 	struct bpf_map *map;
 	void *key, *value;
-	char value_onstack[16];
 	u32 value_size;
 	struct fd f;
 	int err;
@@ -636,14 +629,10 @@ static int map_update_elem(union bpf_attr *attr)
 	else
 		value_size = map->value_size;
 
-	if (likely(value_size <= sizeof(value_onstack))) {
-		value = value_onstack;
-	} else {
-		err = -ENOMEM;
-		value = kmalloc(value_size, GFP_USER | __GFP_NOWARN);
-		if (!value)
-			goto free_key;
-	}
+	err = -ENOMEM;
+	value = kmalloc(value_size, GFP_USER | __GFP_NOWARN);
+	if (!value)
+		goto free_key;
 
 	err = -EFAULT;
 	if (copy_from_user(value, uvalue, value_size) != 0)
@@ -684,8 +673,7 @@ static int map_update_elem(union bpf_attr *attr)
 	if (!err)
 		trace_bpf_map_update_elem(map, ufd, key, value);
 free_value:
-	if (unlikely(value != value_onstack))
-		kfree(value);
+	kfree(value);
 free_key:
 	kfree(key);
 err_put:
@@ -750,7 +738,6 @@ static int map_get_next_key(union bpf_attr *attr)
 	int ufd = attr->map_fd;
 	struct bpf_map *map;
 	void *key, *next_key;
-	char next_key_onstack[48];
 	struct fd f;
 	int err;
 
@@ -777,14 +764,10 @@ static int map_get_next_key(union bpf_attr *attr)
 		key = NULL;
 	}
 
-	if (likely(map->key_size <= sizeof(next_key_onstack))) {
-		next_key = next_key_onstack;
-	} else {
-		err = -ENOMEM;
-		next_key = kmalloc(map->key_size, GFP_USER);
-		if (!next_key)
-			goto free_key;
-	}
+	err = -ENOMEM;
+	next_key = kmalloc(map->key_size, GFP_USER);
+	if (!next_key)
+		goto free_key;
 
 	rcu_read_lock();
 	err = map->ops->map_get_next_key(map, key, next_key);
@@ -800,8 +783,7 @@ static int map_get_next_key(union bpf_attr *attr)
 	err = 0;
 
 free_next_key:
-	if (unlikely(next_key != next_key_onstack))
-		kfree(next_key);
+	kfree(next_key);
 free_key:
 	kfree(key);
 err_put:
