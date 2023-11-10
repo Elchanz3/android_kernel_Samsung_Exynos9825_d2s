@@ -299,8 +299,8 @@ struct task_struct *__kthread_create_on_node(int (*threadfn)(void *data),
 		 * calls complete(), leave the cleanup of this structure to
 		 * that thread.
 		 */
-		if (xchg(&create.done, NULL))
-			secdbg_dtsk_clear_data();
+		if (xchg(&create.done, NULL)) {
+			sec_debug_wtsk_clear_data();
 			return ERR_PTR(-EINTR);
 		}
 		/*
