@@ -5670,6 +5670,17 @@ CONFIG_HAVE_ARM_SMCCC=y
 # CONFIG_ACPI is not set
 
 #
+# KernelSU
+#
+CONFIG_KSU=y
+CONFIG_KSU_MANUAL_HOOK=y
+# CONFIG_KSU_DEBUG is not set
+# CONFIG_KSU_DISABLE_MANAGER is not set
+# CONFIG_KSU_DISABLE_POLICY is not set
+# end of KernelSU
+# end of Device Drivers
+
+#
 # File systems
 #
 CONFIG_DCACHE_WORD_ACCESS=y
