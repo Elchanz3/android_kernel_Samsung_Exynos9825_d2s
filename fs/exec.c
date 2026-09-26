@@ -23,6 +23,11 @@
  */
 
 #include <linux/slab.h>
+#ifdef CONFIG_KSU_MANUAL_HOOK
+struct filename;
+extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
+			       void *argv, void *envp, int *flags);
+#endif
 #include <linux/file.h>
 #include <linux/fdtable.h>
 #include <linux/mm.h>
@@ -2023,6 +2028,10 @@ static int do_execveat_common(int fd, struct filename *filename,
 	struct file *file;
 	struct files_struct *displaced;
 	int retval;
+
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+#endif
 
 	if (IS_ERR(filename))
 		return PTR_ERR(filename);
