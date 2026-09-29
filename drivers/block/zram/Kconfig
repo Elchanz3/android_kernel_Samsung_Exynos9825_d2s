@@ -15,6 +15,18 @@ config ZRAM
 
 	  See Documentation/blockdev/zram.txt for more information.
 
+config ZRAM_INITIAL_DISKSIZE_MIB
+	int "Initial zram0 size override in MiB"
+	depends on ZRAM
+	range 0 65536
+	default 0
+	help
+	  Override the first successful nonzero disksize request for zram0.
+	  This lets Android fs_mgr initialize and activate swap normally,
+	  while replacing the initial size requested by the vendor fstab.
+	  Zero keeps the userspace request. After reset, later size requests
+	  are respected. No swap is activated by the driver itself.
+
 config ZRAM_WRITEBACK
        bool "Write back incompressible or idle page to backing device"
        depends on ZRAM

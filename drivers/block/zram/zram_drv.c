@@ -1742,6 +1742,8 @@ static ssize_t disksize_store(struct device *dev,
 		goto out_unlock;
 	}
 
+	if (zram->initial_size_pending)
+		disksize = (u64)CONFIG_ZRAM_INITIAL_DISKSIZE_MIB << 20;
 	disksize = PAGE_ALIGN(disksize);
 	if (!zram_meta_alloc(zram, disksize)) {
 		err = -ENOMEM;
@@ -1756,6 +1758,12 @@ static ssize_t disksize_store(struct device *dev,
 		goto out_free_meta;
 	}
 
+	if (zram->initial_size_pending) {
+		pr_info("%s: initial swap size %u MiB, compressor %s\n",
+			zram->disk->disk_name, CONFIG_ZRAM_INITIAL_DISKSIZE_MIB,
+			zram->compressor);
+		zram->initial_size_pending = false;
+	}
 	zram->comp = comp;
 	zram->disksize = disksize;
 	set_capacity(zram->disk, zram->disksize >> SECTOR_SHIFT);
@@ -1972,10 +1980,11 @@ static int zram_add(void)
 	zram->disk->queue->backing_dev_info->capabilities |=
 					BDI_CAP_STABLE_WRITES;
 
+	strlcpy(zram->compressor, default_compressor, sizeof(zram->compressor));
+	zram->initial_size_pending = !device_id &&
+		CONFIG_ZRAM_INITIAL_DISKSIZE_MIB != 0;
 	disk_to_dev(zram->disk)->groups = zram_disk_attr_groups;
 	add_disk(zram->disk);
-
-	strlcpy(zram->compressor, default_compressor, sizeof(zram->compressor));
 
 	zram_debugfs_register(zram);
 	pr_info("Added device: %s\n", zram->disk->disk_name);
