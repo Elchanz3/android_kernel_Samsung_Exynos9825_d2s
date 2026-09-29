@@ -1326,6 +1326,11 @@ struct task_struct {
 #ifdef CONFIG_SEC_DEBUG_DTASK
 	struct sec_debug_wait		ssdbg_wait;
 #endif
+	/* Simple LMK builds its temporary task buckets under RCU. */
+#ifdef CONFIG_ANDROID_SIMPLE_LMK
+	struct task_struct		*simple_lmk_next;
+#endif
+
 	/*
 	 * New fields for task_struct should be added above here, so that
 	 * they are included in the randomized portion of task_struct.

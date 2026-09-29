@@ -18,6 +18,7 @@
  */
 
 #include <linux/oom.h>
+#include <linux/simple_lmk.h>
 #include <linux/mm.h>
 #include <linux/err.h>
 #include <linux/gfp.h>
@@ -1065,6 +1066,10 @@ bool out_of_memory(struct oom_control *oc)
 {
 	unsigned long freed = 0;
 	enum oom_constraint constraint = CONSTRAINT_NONE;
+
+	/* Use the normal OOM path until initialized, and for SysRq requests. */
+	if (!oc->memcg && !is_sysrq_oom(oc) && simple_lmk_enabled())
+		return true;
 
 	if (oom_killer_disabled)
 		return false;
