@@ -7,8 +7,13 @@ cd "$DIR"
 
 DEFCONFIG_NAME=exynos9820-d2s_defconfig
 VARIANT=d2s
-VERSION=WeiboKernel_${VARIANT}_v0.8-redone
+VERSION="${KERNEL_VERSION:-WeiboKernel_${VARIANT}_v0.8-redone}"
 LOG_FILE=compilation.log
+
+if [[ ! "$VERSION" =~ ^[[:alnum:]_.-]+$ ]]; then
+	echo "KERNEL_VERSION must be a filename without directory components." >&2
+	exit 1
+fi
 
 mkdir -p out
 DTB_DIR="$DIR/out/arch/arm64/boot/dts"
@@ -48,7 +53,9 @@ cp out/dtb.img AnyKernel3/dtb
 cp "$IMAGE" AnyKernel3/zImage
 cd AnyKernel3
 rm -f "$KERNELZIP"
-zip -r9 "$KERNELZIP" . -x "$KERNELZIP"
+# Package installer inputs explicitly; extracted kernels and old ZIPs are excluded.
+zip -r9 "$KERNELZIP" META-INF tools init modules anykernel.sh dtb zImage \
+	LICENSE README.md
 
 DATE_END=$(date +"%s")
 DIFF=$((DATE_END - DATE_START))
