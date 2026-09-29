@@ -1,58 +1,56 @@
 #!/bin/bash
-
-clear
+set -e -o pipefail
 
 # Variables
-DIR=`readlink -f .`;
-PARENT_DIR=`readlink -f ${DIR}/..`;
+DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+cd "$DIR"
 
 DEFCONFIG_NAME=exynos9820-d2s_defconfig
-CHIPSET_NAME=universal9820
 VARIANT=d2s
-ARCH=arm64
-VERSION=WeiboKernel_${VARIANT}_v0.8
+VERSION=WeiboKernel_${VARIANT}_v0.8-redone
 LOG_FILE=compilation.log
 
-mkdir out
-
-DTB_DIR=$(pwd)/out/arch/arm64/boot/dts
-mkdir ${DTB_DIR}/exynos
+mkdir -p out
+DTB_DIR="$DIR/out/arch/arm64/boot/dts"
+mkdir -p "$DTB_DIR/exynos"
 
 export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export SEC_BUILD_CONF_VENDOR_BUILD_OS=13
+export LLVM=1
+export CCACHE_DISABLE=1
+export KSU_VERSION_OVERRIDE=33004
+export KSU_VERSION_TAG_OVERRIDE=v3.2.0-legacy
+export KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST:-$(uname -n)}"
 
-BUILD_CROSS_COMPILE=/home/chanz22/Documentos/toolchains/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-
-KERNEL_LLVM_BIN=/home/chanz22/Documentos/toolchains/Clang-17.0.0-20230718/bin/clang
-CLANG_TRIPLE=/home/chanz22/Documentos/toolchains/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-
+BUILD_CROSS_COMPILE=/home/chanz22/tc/aarch64-zyc-linux-gnu-14/bin/aarch64-zyc-linux-gnu-
+KERNEL_LLVM_BIN=/home/chanz22/tc/Clang-18.0.0git-20240124/bin/clang
+CLANG_TRIPLE=$BUILD_CROSS_COMPILE
 
 DATE_START=$(date +"%s")
 
-make O=out ARCH=arm64 CC=$KERNEL_LLVM_BIN $DEFCONFIG_NAME
+make O=out ARCH=arm64 CC="$KERNEL_LLVM_BIN" "$DEFCONFIG_NAME"
 make O=out ARCH=arm64 \
-	CROSS_COMPILE=$BUILD_CROSS_COMPILE CC=$KERNEL_LLVM_BIN \
-	CLANG_TRIPLE=$CLANG_TRIPLE -j12 2>&1 |tee ../$LOG_FILE
+	CROSS_COMPILE="$BUILD_CROSS_COMPILE" CC="$KERNEL_LLVM_BIN" \
+	CLANG_TRIPLE="$CLANG_TRIPLE" -j12 2>&1 | tee "$LOG_FILE"
 
-# remove a previous kernel image
-rm $IMAGE &> /dev/null
+"$DIR/tools/mkdtimg" cfg_create "$DIR/out/dtb.img" \
+	dt.configs/exynos9820.cfg -d "$DTB_DIR/exynos"
 
-$(pwd)/tools/mkdtimg cfg_create $(pwd)/out/dtb.img dt.configs/exynos9820.cfg -d ${DTB_DIR}/exynos
-
-IMAGE="out/arch/arm64/boot/Image"
-if [[ -f "$IMAGE" ]]; then
-        KERNELZIP="$VERSION.zip"
-	rm AnyKernel3/zImage > /dev/null 2>&1
-	rm AnyKernel3/dtb > /dev/null 2>&1
-	rm AnyKernel3/*.zip > /dev/null 2>&1
-	mv out/dtb.img AnyKernel3/dtb
-	mv $IMAGE AnyKernel3/zImage
-	cd AnyKernel3
-	zip -r9 $KERNELZIP .
-	
-	DATE_END=$(date +"%s")
-	DIFF=$(($DATE_END - $DATE_START))
-
-	echo -e "\nTime elapsed: $(($DIFF / 60)) minute(s) and $(($DIFF % 60)) seconds.\n"
-	
-	
+IMAGE=out/arch/arm64/boot/Image
+if [[ ! -s "$IMAGE" ]]; then
+	echo "Kernel image was not produced: $IMAGE" >&2
+	exit 1
 fi
+
+KERNELZIP="$VERSION.zip"
+cp out/dtb.img AnyKernel3/dtb
+cp "$IMAGE" AnyKernel3/zImage
+cd AnyKernel3
+rm -f "$KERNELZIP"
+zip -r9 "$KERNELZIP" . -x "$KERNELZIP"
+
+DATE_END=$(date +"%s")
+DIFF=$((DATE_END - DATE_START))
+printf '\nTime elapsed: %d minute(s) and %d seconds.\n' \
+	"$((DIFF / 60))" "$((DIFF % 60))"
