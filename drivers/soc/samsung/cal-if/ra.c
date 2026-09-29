@@ -2,7 +2,8 @@
 #include <linux/kernel.h>
 #include <linux/io.h>
 #include <linux/delay.h>
-#include <soc/samsung/ect_parser.h>
+#include <linux/slab.h>
+#include <soc/samsung/exynos-soc_interface.h>
 #include <soc/samsung/exynos-pmu.h>
 
 #include "cmucal.h"
@@ -820,37 +821,32 @@ static void ra_get_pll_address(struct cmucal_clk *clk)
 static void ra_get_pll_rate_table(struct cmucal_clk *clk)
 {
 	struct cmucal_pll *pll = to_pll_clk(clk);
-	void *pll_block;
+	const struct exynos_soc_catalog_table *rates;
 	struct cmucal_pll_table *table;
-	struct ect_pll *pll_unit;
-	struct ect_pll_frequency *pll_frequency;
 	int i;
 
-	pll_block = ect_get_block(BLOCK_PLL);
-	if (!pll_block)
+	rates = exynos_soc_catalog_find("PLL", clk->name, "rates",
+					EXYNOS_SOC_PLL_RATES);
+	if (!rates || rates->cols != 5 || !rates->rows)
 		return;
 
-	pll_unit = ect_pll_get_pll(pll_block, clk->name);
-	if (!pll_unit)
-		return;
-
-	table = kzalloc(sizeof(struct cmucal_pll_table) * pll_unit->num_of_frequency,
-			GFP_KERNEL);
+	table = kcalloc(rates->rows, sizeof(*table), GFP_KERNEL);
 	if (!table)
 		return;
 
-	for (i = 0; i < pll_unit->num_of_frequency; ++i) {
-		pll_frequency = &pll_unit->frequency_list[i];
+	for (i = 0; i < rates->rows; ++i) {
+		const u64 *row = &rates->data[i * rates->cols];
 
-		table[i].rate = pll_frequency->frequency;
-		table[i].pdiv = pll_frequency->p;
-		table[i].mdiv = pll_frequency->m;
-		table[i].sdiv = pll_frequency->s;
-		table[i].kdiv = pll_frequency->k;
+		table[i].rate = row[0];
+		table[i].pdiv = row[1];
+		table[i].mdiv = row[2];
+		table[i].sdiv = row[3];
+		table[i].kdiv = row[4];
 	}
 
 	pll->rate_table = table;
-	pll->rate_count = pll_unit->num_of_frequency;
+	pll->rate_count = rates->rows;
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_PLL);
 }
 
 int ra_set_list_enable(unsigned int *list, unsigned int num_list)

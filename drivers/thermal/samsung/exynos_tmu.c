@@ -46,6 +46,9 @@
 #include <linux/cpuhotplug.h>
 #include <soc/samsung/tmu.h>
 #include <soc/samsung/ect_parser.h>
+#ifdef CONFIG_SOC_EXYNOS9820
+#include <soc/samsung/exynos-soc_interface.h>
+#endif
 #ifdef CONFIG_EXYNOS_MCINFO
 #include <soc/samsung/exynos-mcinfo.h>
 #endif
@@ -1322,6 +1325,80 @@ static const struct attribute_group exynos_tmu_attr_group = {
 #define FRAC_BITS 10	/* FRAC_BITS should be same with power_allocator */
 
 #if defined(CONFIG_ECT)
+#ifdef CONFIG_SOC_EXYNOS9820
+static int exynos_tmu_parse_interface(struct exynos_tmu_data *data)
+{
+	struct thermal_zone_device *tz = data->tzd;
+	struct __thermal_zone *__tz;
+	const struct exynos_soc_catalog_table *ranges, *temps, *params;
+	unsigned int i;
+
+	if (!tz || !tz->tzp)
+		return -EINVAL;
+	__tz = (struct __thermal_zone *)tz->devdata;
+
+	if (strncasecmp(tz->tzp->governor_name, "power_allocator",
+			 THERMAL_NAME_LENGTH)) {
+		int hotplug_flag = 0;
+
+		ranges = exynos_soc_catalog_find("THERMAL", tz->type,
+					 "ranges", EXYNOS_SOC_THERMAL_RANGES);
+		if (!ranges || ranges->cols != 5)
+			return -EINVAL;
+		__tz->ntrips = __tz->num_tbps = ranges->rows;
+		for (i = 0; i < ranges->rows; i++) {
+			const u64 *row = &ranges->data[i * ranges->cols];
+
+			if (row[0] > INT_MAX / MCELSIUS || row[2] > U32_MAX ||
+			    row[4] > INT_MAX)
+				return -ERANGE;
+			__tz->trips[i].temperature = row[0] * MCELSIUS;
+			__tz->tbps[i].value = row[2];
+			if (row[4] != hotplug_flag) {
+				hotplug_flag = row[4];
+				data->hotplug_out_threshold = row[0];
+				if (i)
+					data->hotplug_in_threshold =
+						ranges->data[(i - 1) * ranges->cols];
+			}
+		}
+		data->hotplug_enable = hotplug_flag != 0;
+	} else {
+		temps = exynos_soc_catalog_find("PIDTM", tz->type,
+					"temperatures", EXYNOS_SOC_PIDTM_TEMPS);
+		params = exynos_soc_catalog_find("PIDTM", tz->type,
+					 "params", EXYNOS_SOC_PIDTM_PARAMS);
+		if (!temps || !params || temps->rows != 1 ||
+		    params->rows != 1 || params->cols < 6)
+			return -EINVAL;
+		__tz->ntrips = temps->cols;
+		for (i = 0; i < temps->cols; i++) {
+			if (temps->data[i] > INT_MAX / MCELSIUS)
+				return -ERANGE;
+			__tz->trips[i].temperature =
+					temps->data[i] * MCELSIUS;
+		}
+		tz->tzp->k_po = params->data[0] << FRAC_BITS;
+		tz->tzp->k_pu = params->data[1] << FRAC_BITS;
+		tz->tzp->k_i = params->data[2] << FRAC_BITS;
+		tz->tzp->integral_max = params->data[3];
+		tz->tzp->integral_cutoff = params->data[4];
+		tz->tzp->sustainable_power = params->data[5];
+		if (params->cols >= 8 && params->data[6] && params->data[7]) {
+			data->hotplug_out_threshold = params->data[6];
+			data->hotplug_in_threshold = params->data[7];
+			data->hotplug_enable = true;
+		} else {
+			data->hotplug_enable = false;
+		}
+	}
+
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_TMU);
+	return 0;
+}
+#endif
+
+#ifndef CONFIG_SOC_EXYNOS9820
 static int exynos_tmu_ect_get_param(struct ect_pidtm_block *pidtm_block, char *name)
 {
 	int i;
@@ -1336,9 +1413,13 @@ static int exynos_tmu_ect_get_param(struct ect_pidtm_block *pidtm_block, char *n
 
 	return param_value;
 }
+#endif
 
 static int exynos_tmu_parse_ect(struct exynos_tmu_data *data)
 {
+#ifdef CONFIG_SOC_EXYNOS9820
+	return exynos_tmu_parse_interface(data);
+#else
 	struct thermal_zone_device *tz = data->tzd;
 	struct __thermal_zone *__tz;
 
@@ -1492,6 +1573,7 @@ static int exynos_tmu_parse_ect(struct exynos_tmu_data *data)
 			data->hotplug_enable = false;
 	}
 	return 0;
+#endif
 };
 #endif
 

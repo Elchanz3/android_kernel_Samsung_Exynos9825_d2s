@@ -433,7 +433,10 @@ void mali_exynos_debug_print_info(struct kbase_device *kbdev)
 
 static int mali_exynos_kbase_entrypoint_init(struct kbase_device *kbdev)
 {
-	gpex_platform_init(&kbdev->dev);
+	int ret = gpex_platform_init(&kbdev->dev);
+
+	if (ret)
+		return ret;
 	kbdev->platform_context = (void *)gpex_utils_get_exynos_context();
 
 	return 0;

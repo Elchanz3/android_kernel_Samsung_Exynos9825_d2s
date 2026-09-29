@@ -23,8 +23,8 @@
 #include <linux/ems.h>
 
 #include <soc/samsung/cal-if.h>
+#include <soc/samsung/exynos-soc_interface.h>
 #include <soc/samsung/exynos-dm.h>
-#include <soc/samsung/ect_parser.h>
 #include <soc/samsung/exynos-cpuhp.h>
 #include <soc/samsung/exynos-cpupm.h>
 #include <soc/samsung/exynos-emc.h>
@@ -1062,9 +1062,14 @@ static __init void init_sysfs(void) {
 
 static __init int init_table(struct exynos_cpufreq_domain *domain)
 {
+	static const char * const soc_cpu_names[] = {
+		"dvfs_cpucl0", "dvfs_cpucl1", "dvfs_cpucl2",
+	};
 	unsigned int index;
 	unsigned long *table;
 	unsigned int *volt_table;
+	unsigned int rate_khz, volt_uv;
+	int asv_group;
 	struct exynos_cpufreq_dm *dm;
 	struct exynos_ufc *ufc;
 	int cpu;
@@ -1085,8 +1090,24 @@ static __init int init_table(struct exynos_cpufreq_domain *domain)
 		goto free_table;
 	}
 
-	cal_dfs_get_rate_table(domain->cal_id, table);
-	cal_dfs_get_asv_table(domain->cal_id, volt_table);
+	if (domain->id >= ARRAY_SIZE(soc_cpu_names)) {
+		ret = -EINVAL;
+		goto free_volt_table;
+	}
+	asv_group = cal_asv_get_grp(domain->cal_id);
+	if (asv_group < 0) {
+		ret = -EINVAL;
+		goto free_volt_table;
+	}
+	for (index = 0; index < domain->table_size; index++) {
+		ret = exynos_soc_get_opp(soc_cpu_names[domain->id],
+					 cal_asv_get_tablever(), asv_group, index,
+					 &rate_khz, &volt_uv);
+		if (ret)
+			goto free_volt_table;
+		table[index] = rate_khz;
+		volt_table[index] = volt_uv;
+	}
 
 	for (index = 0; index < domain->table_size; index++) {
 		domain->freq_table[index].driver_data = index;
@@ -1126,9 +1147,10 @@ static __init int init_table(struct exynos_cpufreq_domain *domain)
 
 	init_sched_energy_table(&domain->cpus, domain->table_size, table, volt_table,
 				domain->max_freq, domain->min_freq);
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_CPUFREQ);
 
+free_volt_table:
 	kfree(volt_table);
-
 free_table:
 	kfree(table);
 
@@ -1190,50 +1212,35 @@ static __init int init_pm_qos(struct exynos_cpufreq_domain *domain,
 	return 0;
 }
 
-static int init_constraint_table_ect(struct exynos_cpufreq_domain *domain,
+static int init_constraint_table_soc(struct exynos_cpufreq_domain *domain,
 					struct exynos_cpufreq_dm *dm,
 					struct device_node *dn)
 {
-	void *block;
-	struct ect_minlock_domain *ect_domain;
-	const char *ect_name;
+	const struct exynos_soc_catalog_table *minlock;
+	const char *name;
 	unsigned int index, c_index;
-	bool valid_row = false;
 	int ret;
 
-	ret = of_property_read_string(dn, "ect-name", &ect_name);
+	ret = of_property_read_string(dn, "ect-name", &name);
 	if (ret)
 		return ret;
 
-	block = ect_get_block(BLOCK_MINLOCK);
-	if (!block)
-		return -ENODEV;
-
-	ect_domain = ect_minlock_get_domain(block, (char *)ect_name);
-	if (!ect_domain)
+	minlock = exynos_soc_catalog_find("MINLOCK", name, "table",
+					 EXYNOS_SOC_MINLOCK_TABLE);
+	if (!minlock || minlock->cols != 2 || !minlock->rows)
 		return -ENODEV;
 
 	for (index = 0; index < domain->table_size; index++) {
 		unsigned int freq = domain->freq_table[index].frequency;
 
-		for (c_index = 0; c_index < ect_domain->num_of_level; c_index++) {
-			/* find row same as frequency */
-			if (freq == ect_domain->level[c_index].main_frequencies) {
+		dm->c.freq_table[index].constraint_freq = minlock->data[1];
+		for (c_index = 0; c_index < minlock->rows; c_index++) {
+			if (freq == minlock->data[c_index * 2]) {
 				dm->c.freq_table[index].constraint_freq
-					= ect_domain->level[c_index].sub_frequencies;
-				valid_row = true;
+					= minlock->data[c_index * 2 + 1];
 				break;
 			}
 		}
-
-		/*
-		 * Due to higher levels of constraint_freq should not be NULL,
-		 * they should be filled with highest value of sub_frequencies of ect
-		 * until finding first(highest) domain frequency fit with main_frequeucy of ect.
-		 */
-		if (!valid_row)
-			dm->c.freq_table[index].constraint_freq
-				= ect_domain->level[0].sub_frequencies;
 	}
 
 	return 0;
@@ -1318,7 +1325,7 @@ static int init_dm(struct exynos_cpufreq_domain *domain,
 
 		if (of_property_read_bool(child, "guidance")) {
 			dm->c.guidance = true;
-			if (init_constraint_table_ect(domain, dm, child))
+			if (init_constraint_table_soc(domain, dm, child))
 				continue;
 		} else {
 			if (init_constraint_table_dt(domain, dm, child))

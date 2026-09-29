@@ -35,7 +35,7 @@
 #include <linux/devfreq_boost.h>
 
 #include <soc/samsung/exynos-devfreq.h>
-#include <soc/samsung/ect_parser.h>
+#include <soc/samsung/exynos-soc_interface.h>
 #ifdef CONFIG_EXYNOS_DVFS_MANAGER
 #include <soc/samsung/exynos-dm.h>
 #endif
@@ -80,16 +80,16 @@ pure_initcall(init_alt_notifier_list);
 
 #endif
 #ifdef CONFIG_EXYNOS_DVFS_MANAGER
-static unsigned int ect_find_constraint_freq(struct ect_minlock_domain *ect_domain,
-					unsigned int freq)
+static unsigned int soc_find_constraint_freq(
+		const struct exynos_soc_catalog_table *minlock, unsigned int freq)
 {
 	unsigned int i;
 
-	for (i = 0; i < ect_domain->num_of_level; i++)
-		if (ect_domain->level[i].main_frequencies == freq)
-			break;
+	for (i = 0; i < minlock->rows; i++)
+		if (minlock->data[i * 2] == freq)
+			return minlock->data[i * 2 + 1];
 
-	return ect_domain->level[i].sub_frequencies;
+	return 0;
 }
 #endif
 
@@ -99,10 +99,8 @@ static int exynos_constraint_parse(struct exynos_devfreq_data *data,
 	struct device_node *np, *child;
 	u32 num_child, constraint_dm_type, constraint_type;
 	const char *devfreq_domain_name;
-	int i = 0, j, const_flag = 1;
-	void *min_block, *dvfs_block;
-	struct ect_dvfs_domain *dvfs_domain;
-	struct ect_minlock_domain *ect_domain;
+	int i = 0, j, use_level;
+	const struct exynos_soc_catalog_table *minlock;
 #ifdef CONFIG_EXYNOS_DVFS_MANAGER
 	struct exynos_dm_freq *const_table;
 #endif
@@ -110,78 +108,64 @@ static int exynos_constraint_parse(struct exynos_devfreq_data *data,
 	if (!np)
 		return 0;
 	num_child = of_get_child_count(np);
-#ifdef CONFIG_EXYNOS_DVFS_MANAGER
-	data->nr_constraint = num_child;
-	data->constraint = kzalloc(sizeof(struct exynos_dm_constraint *) * num_child, GFP_KERNEL);
-#endif
 	if (of_property_read_string(data->dev->of_node, "devfreq_domain_name", &devfreq_domain_name))
 		return -ENODEV;
 
-	dvfs_block = ect_get_block(BLOCK_DVFS);
-	if (dvfs_block == NULL)
-		return -ENODEV;
+	minlock = exynos_soc_catalog_find("MINLOCK", devfreq_domain_name,
+					   "table", EXYNOS_SOC_MINLOCK_TABLE);
+	/* Domains without MINLOCK still send their interface OPPs to FVP. */
+	if (!minlock || minlock->cols != 2)
+		return 0;
 
-	dvfs_domain = ect_dvfs_get_domain(dvfs_block, (char *)devfreq_domain_name);
-	if (dvfs_domain == NULL)
-		return -ENODEV;
-
-	/* Although there is not any constraint, MIF table should be sent to FVP */
-	min_block = ect_get_block(BLOCK_MINLOCK);
-	if (min_block == NULL) {
-		dev_info(data->dev, "There is not a min block in ECT\n");
-		const_flag = 0;
-	}
-
-	ect_domain = ect_minlock_get_domain(min_block, (char *)devfreq_domain_name);
-	if (ect_domain == NULL) {
-		dev_info(data->dev, "There is not a domain in min block\n");
-		const_flag = 0;
-	}
+#ifdef CONFIG_EXYNOS_DVFS_MANAGER
+	data->nr_constraint = num_child;
+	data->constraint = kcalloc(num_child, sizeof(*data->constraint), GFP_KERNEL);
+	if (!data->constraint)
+		return -ENOMEM;
+#endif
 
 	for_each_available_child_of_node(np, child) {
-		int use_level = 0;
+		use_level = 0;
 
 		if (of_property_read_u32(child, "constraint_dm_type", &constraint_dm_type))
 			return -ENODEV;
 		if (of_property_read_u32(child, "constraint_type", &constraint_type))
 			return -ENODEV;
 #ifdef CONFIG_EXYNOS_DVFS_MANAGER
-		if (const_flag) {
-			data->constraint[i] =
+		data->constraint[i] =
 				kzalloc(sizeof(struct exynos_dm_constraint), GFP_KERNEL);
-			if (data->constraint[i] == NULL) {
-				dev_err(data->dev, "failed to allocate constraint\n");
-				return -ENOMEM;
-			}
-
-			const_table = kzalloc(sizeof(struct exynos_dm_freq) * ect_domain->num_of_level, GFP_KERNEL);
-			if (const_table == NULL) {
-				dev_err(data->dev, "failed to allocate constraint\n");
-				kfree(data->constraint[i]);
-				return -ENOMEM;
-			}
-
-			data->constraint[i]->guidance = true;
-			data->constraint[i]->constraint_type = constraint_type;
-			data->constraint[i]->constraint_dm_type = constraint_dm_type;
-			data->constraint[i]->table_length = ect_domain->num_of_level;
-			data->constraint[i]->freq_table = const_table;
+		if (data->constraint[i] == NULL) {
+			dev_err(data->dev, "failed to allocate constraint\n");
+			return -ENOMEM;
 		}
+
+		const_table = kcalloc(data->max_state, sizeof(*const_table), GFP_KERNEL);
+		if (const_table == NULL) {
+			dev_err(data->dev, "failed to allocate constraint\n");
+			kfree(data->constraint[i]);
+			return -ENOMEM;
+		}
+
+		data->constraint[i]->guidance = true;
+		data->constraint[i]->constraint_type = constraint_type;
+		data->constraint[i]->constraint_dm_type = constraint_dm_type;
+		data->constraint[i]->freq_table = const_table;
 #endif
-		for (j = 0; j < dvfs_domain->num_of_level; j++) {
+		for (j = 0; j < data->max_state; j++) {
 			if (data->opp_list[j].freq > max_freq ||
 					data->opp_list[j].freq < min_freq)
 				continue;
 
 #ifdef CONFIG_EXYNOS_DVFS_MANAGER
-			if (const_flag) {
-				const_table[use_level].master_freq = data->opp_list[j].freq;
-				const_table[use_level].constraint_freq
-					= ect_find_constraint_freq(ect_domain, data->opp_list[j].freq);
-			}
+			const_table[use_level].master_freq = data->opp_list[j].freq;
+			const_table[use_level].constraint_freq =
+				soc_find_constraint_freq(minlock, data->opp_list[j].freq);
 #endif
 			use_level++;
 		}
+#ifdef CONFIG_EXYNOS_DVFS_MANAGER
+		data->constraint[i]->table_length = use_level;
+#endif
 		i++;
 	}
 	return 0;
@@ -983,51 +967,109 @@ struct devfreq *find_exynos_devfreq_device(void *devdata)
 #endif
 
 #ifdef CONFIG_OF
-#if defined(CONFIG_ECT)
-static int exynos_devfreq_parse_ect(struct exynos_devfreq_data *data, const char *dvfs_domain_name)
+static int exynos_devfreq_parse_soc(struct exynos_devfreq_data *data,
+				    const char *dvfs_domain_name)
 {
-	int i;
-	void *dvfs_block;
-	struct ect_dvfs_domain *dvfs_domain;
+	const struct exynos_soc_catalog_table *levels;
+	unsigned int dfs_id, freq, volt;
+	int group, i, ret;
 
-	dvfs_block = ect_get_block(BLOCK_DVFS);
-	if (dvfs_block == NULL)
+	levels = exynos_soc_catalog_find("DVFS", dvfs_domain_name, "levels",
+					 EXYNOS_SOC_DVFS_LEVELS);
+	if (!levels || levels->rows != 1 || !levels->cols)
 		return -ENODEV;
-
-	dvfs_domain = ect_dvfs_get_domain(dvfs_block, (char *)dvfs_domain_name);
-	if (dvfs_domain == NULL)
+	if (of_property_read_u32(data->dev->of_node, "dfs_id", &dfs_id))
 		return -ENODEV;
+	group = cal_asv_get_grp(dfs_id);
+	if (group < 0)
+		return -EINVAL;
 
-	data->max_state = dvfs_domain->num_of_level;
+	data->max_state = levels->cols;
 	data->opp_list = kzalloc(sizeof(struct exynos_devfreq_opp_table) * data->max_state, GFP_KERNEL);
 	if (!data->opp_list) {
 		pr_err("%s: failed to allocate opp_list\n", __func__);
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < dvfs_domain->num_of_level; ++i) {
+	for (i = 0; i < data->max_state; ++i) {
+		ret = exynos_soc_get_opp(dvfs_domain_name,
+					 cal_asv_get_tablever(), group, i,
+					 &freq, &volt);
+		if (ret) {
+			kfree(data->opp_list);
+			data->opp_list = NULL;
+			return ret;
+		}
 		data->opp_list[i].idx = i;
-		data->opp_list[i].freq = dvfs_domain->list_level[i].level;
-		data->opp_list[i].volt = 0;
+		data->opp_list[i].freq = freq;
+		data->opp_list[i].volt = volt;
 	}
 
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_DEVFREQ);
 	return 0;
 }
-#endif
+
+static int exynos_devfreq_reconcile_limits(struct exynos_devfreq_data *data,
+					   const char *dvfs_domain_name)
+{
+	unsigned int min_khz, max_khz, boot_khz, resume_khz;
+	unsigned int allowed_min = UINT_MAX, allowed_max = 0;
+	unsigned int old_max = data->max_freq;
+	int i, ret;
+
+	ret = exynos_soc_get_limits(dvfs_domain_name,
+				    cal_asv_get_tablever(),
+				    &min_khz, &max_khz,
+				    &boot_khz, &resume_khz);
+	if (ret)
+		return ret;
+
+	/* Keep a narrower DTS policy, but never publish a rate outside GEN. */
+	min_khz = max(min_khz, data->min_freq);
+	max_khz = min(max_khz, data->max_freq);
+	for (i = 0; i < data->max_state; i++) {
+		unsigned int freq = data->opp_list[i].freq;
+
+		if (freq >= min_khz && freq <= max_khz) {
+			allowed_min = min(allowed_min, freq);
+			allowed_max = max(allowed_max, freq);
+		}
+	}
+	if (!allowed_max)
+		return -ERANGE;
+
+	data->min_freq = allowed_min;
+	data->max_freq = allowed_max;
+	data->devfreq_profile.initial_freq =
+		clamp_val(data->devfreq_profile.initial_freq,
+			  allowed_min, allowed_max);
+	data->default_qos = clamp_val(data->default_qos,
+				      allowed_min, allowed_max);
+	data->devfreq_profile.suspend_freq =
+		clamp_val(data->devfreq_profile.suspend_freq,
+			  allowed_min, allowed_max);
+	data->reboot_freq = clamp_val(data->reboot_freq,
+				      allowed_min, allowed_max);
+	if (data->boot_freq)
+		data->boot_freq = clamp_val(data->boot_freq,
+					    allowed_min, allowed_max);
+	if (old_max != allowed_max)
+		dev_info(data->dev, "%s max policy %u -> %u kHz from SoC interface\n",
+			 dvfs_domain_name, old_max, allowed_max);
+	return 0;
+}
 
 static int exynos_devfreq_parse_dt(struct device_node *np, struct exynos_devfreq_data *data)
 {
 	const char *use_acpm, *bts_update;
 	const char *use_get_dev;
-#if defined(CONFIG_ECT)
 	const char *devfreq_domain_name;
-#endif
 	const char *buf;
 	const char *use_delay_time;
 	const char *pd_name;
 	const char *update_fvp;
 	int ntokens;
-	int not_using_ect = true;
+	int soc_ret;
 #if defined(CONFIG_EXYNOS_ALT_DVFS)
 	struct devfreq_alt_dvfs_data *alt_data;
 #endif
@@ -1044,14 +1086,13 @@ static int exynos_devfreq_parse_dt(struct device_node *np, struct exynos_devfreq
 	if (of_property_read_u32(np, "ess_flag", &data->ess_flag))
 		return -ENODEV;
 
-#if defined(CONFIG_ECT)
 	if (of_property_read_string(np, "devfreq_domain_name", &devfreq_domain_name))
 		return -ENODEV;
-	not_using_ect = exynos_devfreq_parse_ect(data, devfreq_domain_name);
-#endif
-	if (not_using_ect) {
-		dev_err(data->dev, "cannot parse the DVFS info in ECT");
-		return -ENODEV;
+	soc_ret = exynos_devfreq_parse_soc(data, devfreq_domain_name);
+	if (soc_ret) {
+		dev_err(data->dev, "SoC interface DVFS unavailable for %s: %d\n",
+			devfreq_domain_name, soc_ret);
+		return soc_ret;
 	}
 
 	if (of_property_read_string(np, "pd_name", &pd_name)) {
@@ -1082,6 +1123,12 @@ static int exynos_devfreq_parse_dt(struct device_node *np, struct exynos_devfreq
 	} else {
 		data->boot_qos_timeout = boot_array[0];
 		data->boot_freq = boot_array[1];
+	}
+	soc_ret = exynos_devfreq_reconcile_limits(data, devfreq_domain_name);
+	if (soc_ret) {
+		kfree(data->opp_list);
+		data->opp_list = NULL;
+		return soc_ret;
 	}
 
 	if (of_property_read_u32(np, "governor", &data->gov_type))

@@ -31,6 +31,9 @@
 #if defined(CONFIG_ECT)
 #include <soc/samsung/ect_parser.h>
 #endif
+#ifdef CONFIG_SOC_EXYNOS9820
+#include <soc/samsung/exynos-soc_interface.h>
+#endif
 #include "samsung/exynos_tmu.h"
 
 /**
@@ -498,14 +501,40 @@ EXPORT_SYMBOL_GPL(isp_cooling_unregister);
  */
 static int isp_cooling_table_init(void)
 {
-	int ret = 0, i = 0;
-#if defined(CONFIG_ECT)
+	int i, last_fps = -1, count = 0;
+#ifdef CONFIG_SOC_EXYNOS9820
+	const struct exynos_soc_catalog_table *ranges;
+
+	ranges = exynos_soc_catalog_find("THERMAL", "ISP", "ranges",
+					 EXYNOS_SOC_THERMAL_RANGES);
+	if (!ranges || ranges->cols != 5)
+		return -ENODEV;
+	isp_fps_table = kcalloc(ranges->rows + 1,
+				 sizeof(*isp_fps_table), GFP_KERNEL);
+	if (!isp_fps_table)
+		return -ENOMEM;
+
+	for (i = 0; i < ranges->rows; i++) {
+		u64 fps = ranges->data[i * ranges->cols + 2];
+
+		if (fps > INT_MAX) {
+			kfree(isp_fps_table);
+			isp_fps_table = NULL;
+			return -ERANGE;
+		}
+		if (last_fps == fps)
+			continue;
+		isp_fps_table[count].driver_data = count;
+		isp_fps_table[count].fps = fps;
+		last_fps = fps;
+		count++;
+	}
+	isp_fps_table[count].fps = ISP_FPS_TABLE_END;
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_ISP_COOLING);
+	return 0;
+#elif defined(CONFIG_ECT)
 	void *thermal_block;
 	struct ect_ap_thermal_function *function;
-	int last_fps = -1, count = 0;
-#endif
-
-#if defined(CONFIG_ECT)
 	thermal_block = ect_get_block(BLOCK_AP_THERMAL);
 	if (thermal_block == NULL) {
 		pr_err("Failed to get thermal block");
@@ -537,11 +566,11 @@ static int isp_cooling_table_init(void)
 
 	if (i == function->num_of_range)
 		isp_fps_table[count].fps = ISP_FPS_TABLE_END;
+	return 0;
 #else
 	pr_err("[ISP cooling] could not find ECT information\n");
-	ret = -EINVAL;
+	return -EINVAL;
 #endif
-	return ret;
 }
 
 static int __init exynos_isp_cooling_init(void)

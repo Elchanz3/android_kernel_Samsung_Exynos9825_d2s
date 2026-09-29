@@ -19,6 +19,7 @@
  */
 
 #include <soc/samsung/cal-if.h>
+#include <soc/samsung/exynos-soc_interface.h>
 
 #include <gpexbe_devicetree.h>
 
@@ -36,28 +37,32 @@ static unsigned int cal_id;
 
 int gpexbe_clock_get_level_num(void)
 {
-	return cal_dfs_get_lv_num(cal_id);
+	const struct exynos_soc_catalog_table *levels;
+
+	levels = exynos_soc_catalog_find("DVFS", "dvfs_g3d", "levels",
+					 EXYNOS_SOC_DVFS_LEVELS);
+	return levels ? levels->cols : 0;
 }
 
 int gpexbe_clock_get_rate_asv_table(struct freq_volt *fv_array, int level_num)
 {
-	int i;
-	int ret = 0;
-	struct dvfs_rate_volt rate_volt[48];
+	unsigned int freq, volt;
+	int group, i, ret;
 
-	ret = cal_dfs_get_rate_asv_table(cal_id, rate_volt);
-
-	if (!ret) {
-		/* TODO: print error. Also remove this size limit by using dynamic alloc */
-		return ret;
-	}
-
+	if (!fv_array || level_num != gpexbe_clock_get_level_num())
+		return -EINVAL;
+	group = cal_asv_get_grp(cal_id);
+	if (group < 0)
+		return -EINVAL;
 	for (i = 0; i < level_num; i++) {
-		fv_array[i].freq = rate_volt[i].rate;
-		fv_array[i].volt = rate_volt[i].volt;
+		ret = exynos_soc_get_opp("dvfs_g3d", cal_asv_get_tablever(),
+					 group, i, &freq, &volt);
+		if (ret)
+			return ret;
+		fv_array[i].freq = freq;
+		fv_array[i].volt = volt;
 	}
-
-	return ret;
+	return level_num;
 }
 
 int gpexbe_clock_get_boot_freq()
@@ -96,6 +101,10 @@ int gpexbe_clock_get_rate()
 
 int gpexbe_clock_init()
 {
+	const struct exynos_soc_catalog_table *levels;
+	unsigned int min_khz, max_khz, boot_khz, resume_khz;
+	int i, ret;
+
 	cal_id = gpexbe_devicetree_get_int(g3d_cmu_cal_id);
 
 	if (!cal_id) {
@@ -103,8 +112,22 @@ int gpexbe_clock_init()
 		return -1;
 	}
 
-	pm_info.boot_clock = cal_dfs_get_boot_freq(cal_id);
-	pm_info.max_clock_limit = (int)cal_dfs_get_max_freq(cal_id);
+	levels = exynos_soc_catalog_find("DVFS", "dvfs_g3d", "levels",
+					 EXYNOS_SOC_DVFS_LEVELS);
+	ret = exynos_soc_get_limits("dvfs_g3d", cal_asv_get_tablever(),
+				    &min_khz, &max_khz, &boot_khz, &resume_khz);
+	if (!levels || ret)
+		return -EINVAL;
+	pm_info.boot_clock = boot_khz;
+	pm_info.max_clock_limit = 0;
+	for (i = 0; i < levels->cols; i++) {
+		if (levels->data[i] <= max_khz) {
+			pm_info.max_clock_limit = levels->data[i];
+			break;
+		}
+	}
+	if (!pm_info.max_clock_limit)
+		return -EINVAL;
 
 	gpex_utils_get_exynos_context()->pm_info = &pm_info;
 

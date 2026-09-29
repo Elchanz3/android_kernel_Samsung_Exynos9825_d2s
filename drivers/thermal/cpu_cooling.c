@@ -37,7 +37,7 @@
 
 #include <soc/samsung/tmu.h>
 #include <soc/samsung/cal-if.h>
-#include <soc/samsung/ect_parser.h>
+#include <soc/samsung/exynos-soc_interface.h>
 
 #include <dt-bindings/clock/exynos9820.h>
 /*
@@ -273,8 +273,7 @@ static int build_static_power_table(struct device_node *np, struct cpufreq_cooli
 	int i, j;
 	int ratio, asv_group, cal_id, ret = 0;
 
-	void *gen_block;
-	struct ect_gen_param_table *volt_temp_param = NULL, *asv_param = NULL;
+	const struct exynos_soc_catalog_table *volt_temp_param = NULL, *asv_param = NULL;
 	int ratio_table[16] = { 0, 18, 22, 27, 33, 40, 49, 60, 73, 89, 108, 131, 159, 194, 232, 250};
 
 	ret = of_property_read_u32(np, "cal-id", &cal_id);
@@ -292,58 +291,52 @@ static int build_static_power_table(struct device_node *np, struct cpufreq_cooli
 	if (!ratio)
 		ratio = ratio_table[asv_group];
 
-	gen_block = ect_get_block("GEN");
-	if (gen_block == NULL) {
-		pr_err("%s: Failed to get gen block from ECT\n", __func__);
-		return -EINVAL;
-	}
-
 #if defined(CONFIG_SOC_EXYNOS9820)
 	if (cal_id == ACPM_DVFS_CPUCL1) {
-		volt_temp_param = ect_gen_param_get_table(gen_block, "DTM_MID_VOLT_TEMP");
-		asv_param = ect_gen_param_get_table(gen_block, "DTM_MID_ASV");
+		volt_temp_param = exynos_soc_catalog_find("GEN", "DTM_MID_VOLT_TEMP", "table", EXYNOS_SOC_GEN_TABLE);
+		asv_param = exynos_soc_catalog_find("GEN", "DTM_MID_ASV", "table", EXYNOS_SOC_GEN_TABLE);
 	} else if (cal_id == ACPM_DVFS_CPUCL2) {
-		volt_temp_param = ect_gen_param_get_table(gen_block, "DTM_BIG_VOLT_TEMP");
-		asv_param = ect_gen_param_get_table(gen_block, "DTM_BIG_ASV");
+		volt_temp_param = exynos_soc_catalog_find("GEN", "DTM_BIG_VOLT_TEMP", "table", EXYNOS_SOC_GEN_TABLE);
+		asv_param = exynos_soc_catalog_find("GEN", "DTM_BIG_ASV", "table", EXYNOS_SOC_GEN_TABLE);
 	}
 #else
-	volt_temp_param = ect_gen_param_get_table(gen_block, "DTM_BIG_VOLT_TEMP");
-	asv_param = ect_gen_param_get_table(gen_block, "DTM_BIG_ASV");
+	volt_temp_param = exynos_soc_catalog_find("GEN", "DTM_BIG_VOLT_TEMP", "table", EXYNOS_SOC_GEN_TABLE);
+	asv_param = exynos_soc_catalog_find("GEN", "DTM_BIG_ASV", "table", EXYNOS_SOC_GEN_TABLE);
 #endif
 
 	if (volt_temp_param && asv_param) {
-		cpufreq_cdev->var_volt_size = volt_temp_param->num_of_row - 1;
-		cpufreq_cdev->var_temp_size = volt_temp_param->num_of_col - 1;
+		cpufreq_cdev->var_volt_size = volt_temp_param->rows - 1;
+		cpufreq_cdev->var_temp_size = volt_temp_param->cols - 1;
 
 		cpufreq_cdev->var_coeff = kzalloc(sizeof(int) *
-							volt_temp_param->num_of_row *
-							volt_temp_param->num_of_col,
+							volt_temp_param->rows *
+							volt_temp_param->cols,
 							GFP_KERNEL);
 		if (!cpufreq_cdev->var_coeff)
 			goto err_mem;
 
 		cpufreq_cdev->asv_coeff = kzalloc(sizeof(int) *
-							asv_param->num_of_row *
-							asv_param->num_of_col,
+							asv_param->rows *
+							asv_param->cols,
 							GFP_KERNEL);
 		if (!cpufreq_cdev->asv_coeff)
 			goto free_var_coeff;
 
 		cpufreq_cdev->var_table = kzalloc(sizeof(int) *
-							volt_temp_param->num_of_row *
-							volt_temp_param->num_of_col,
+							volt_temp_param->rows *
+							volt_temp_param->cols,
 							GFP_KERNEL);
 		if (!cpufreq_cdev->var_table)
 			goto free_asv_coeff;
 
-		memcpy(cpufreq_cdev->var_coeff, volt_temp_param->parameter,
-			sizeof(int) * volt_temp_param->num_of_row * volt_temp_param->num_of_col);
-		memcpy(cpufreq_cdev->asv_coeff, asv_param->parameter,
-			sizeof(int) * asv_param->num_of_row * asv_param->num_of_col);
-		memcpy(cpufreq_cdev->var_table, volt_temp_param->parameter,
-			sizeof(int) * volt_temp_param->num_of_row * volt_temp_param->num_of_col);
+		for (i = 0; i < volt_temp_param->rows * volt_temp_param->cols; i++) {
+			cpufreq_cdev->var_coeff[i] = (s32)(u32)volt_temp_param->data[i];
+			cpufreq_cdev->var_table[i] = (s32)(u32)volt_temp_param->data[i];
+		}
+		for (i = 0; i < asv_param->rows * asv_param->cols; i++)
+			cpufreq_cdev->asv_coeff[i] = (s32)(u32)asv_param->data[i];
 	} else {
-		pr_err("%s: Failed to get param table from ECT\n", __func__);
+		pr_err("%s: Failed to get param table from SoC interface\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1183,8 +1176,7 @@ struct thermal_cooling_device *
 exynos_cpufreq_cooling_register(struct device_node *np, struct cpufreq_policy *policy)
 {
 	struct thermal_zone_device *tz;
-	void *gen_block;
-	struct ect_gen_param_table *pwr_coeff;
+	const struct exynos_soc_catalog_table *pwr_coeff;
 	u32 capacitance = 0;
 
 	if (!np)
@@ -1193,17 +1185,13 @@ exynos_cpufreq_cooling_register(struct device_node *np, struct cpufreq_policy *p
 	tz = thermal_zone_get_zone_by_cool_np(np);
 
 	if (tz) {
-		gen_block = ect_get_block("GEN");
-		if (gen_block == NULL) {
-			pr_err("%s: Failed to get gen block from ECT\n", __func__);
+		pwr_coeff = exynos_soc_catalog_find("GEN", "DTM_PWR_Coeff", "table",
+					 EXYNOS_SOC_GEN_TABLE);
+		if (!pwr_coeff || pwr_coeff->rows != 1 || tz->id >= pwr_coeff->cols) {
+			pr_err("%s: power coefficient unavailable in SoC interface\n", __func__);
 			goto regist;
 		}
-		pwr_coeff = ect_gen_param_get_table(gen_block, "DTM_PWR_Coeff");
-		if (pwr_coeff == NULL) {
-			pr_err("%s: Failed to get power coeff from ECT\n", __func__);
-			goto regist;
-		}
-		capacitance = pwr_coeff->parameter[tz->id];
+		capacitance = pwr_coeff->data[tz->id];
 	} else {
 		pr_err("%s: could not find thermal zone\n", __func__);
 	}

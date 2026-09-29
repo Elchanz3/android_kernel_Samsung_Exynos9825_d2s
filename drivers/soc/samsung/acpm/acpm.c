@@ -346,6 +346,70 @@ static int acpm_send_data(struct device_node *node, unsigned int check_id,
 	return ret;
 }
 
+static ssize_t acpm_layout_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct device_node *ipc_node;
+	struct resource sram;
+	struct plugin *plugins;
+	u32 plugin_offset, fvmap_offset, num_plugins;
+	size_t len = 0;
+	int i, ret;
+
+	if (!acpm_initdata || !acpm_srambase)
+		return -ENODEV;
+
+	ipc_node = of_find_compatible_node(NULL, NULL, "samsung,exynos-acpm-ipc");
+	if (!ipc_node)
+		return -ENODEV;
+	ret = of_address_to_resource(ipc_node, 1, &sram);
+	of_node_put(ipc_node);
+	if (ret)
+		return ret;
+
+	plugin_offset = acpm_initdata->plugins;
+	num_plugins = acpm_initdata->num_plugins;
+	if (num_plugins > 32 || plugin_offset > resource_size(&sram) ||
+	    num_plugins * sizeof(*plugins) > resource_size(&sram) - plugin_offset)
+		return -EINVAL;
+
+	len += scnprintf(buf + len, PAGE_SIZE - len,
+		"ACPM SRAM: physical=%pa bytes=0x%llx\n"
+		"Framework: fw_size=0x%x total_size=0x%x plugins=0x%x count=%u\n",
+		&sram.start, (unsigned long long)resource_size(&sram),
+		acpm_initdata->fw_size, acpm_initdata->total_size,
+		plugin_offset, num_plugins);
+
+	if (!of_property_read_u32(dev->of_node, "fvmap_offset", &fvmap_offset))
+		len += scnprintf(buf + len, PAGE_SIZE - len,
+			"FVMap offset from DVFS plugin base: 0x%x\n",
+			fvmap_offset);
+
+	plugins = (struct plugin *)(acpm_srambase + plugin_offset);
+	len += scnprintf(buf + len, PAGE_SIZE - len,
+		"Plugin | ID | Base | Image size | Image end | Attached | Stay | Firmware\n");
+	for (i = 0; i < num_plugins && len < PAGE_SIZE - 100; i++) {
+		char name[33] = "unknown";
+		u32 base = plugins[i].base_addr & ~1U;
+		u32 name_offset = plugins[i].fw_name;
+
+		if (name_offset && name_offset <= resource_size(&sram) &&
+		    32 <= resource_size(&sram) - name_offset) {
+			memcpy_fromio(name, acpm_srambase + name_offset, 32);
+			name[32] = '\0';
+		}
+
+		len += scnprintf(buf + len, PAGE_SIZE - len,
+			"%6d | %2u | 0x%05x | 0x%05x | 0x%05x | %8u | %4u | %s\n",
+			i, plugins[i].id, base, plugins[i].size,
+			base + plugins[i].size, plugins[i].is_attached,
+			plugins[i].stay_attached, name);
+	}
+
+	return len;
+}
+static DEVICE_ATTR_RO(acpm_layout);
+
 static int acpm_probe(struct platform_device *pdev)
 {
 	struct acpm_info *acpm;
@@ -379,6 +443,11 @@ static int acpm_probe(struct platform_device *pdev)
 		pr_warn("No matching property: peritiemr_cnt\n");
 
 	exynos_acpm = acpm;
+	ret = device_create_file(&pdev->dev, &dev_attr_acpm_layout);
+	if (ret) {
+		dev_warn(&pdev->dev, "failed to create acpm_layout: %d\n", ret);
+		ret = 0;
+	}
 
 	acpm_debugfs_init(acpm);
 
@@ -388,6 +457,7 @@ static int acpm_probe(struct platform_device *pdev)
 
 static int acpm_remove(struct platform_device *pdev)
 {
+	device_remove_file(&pdev->dev, &dev_attr_acpm_layout);
 	return 0;
 }
 

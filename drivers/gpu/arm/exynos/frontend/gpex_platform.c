@@ -49,9 +49,13 @@
 
 int gpex_platform_init(struct device **dev)
 {
+	int ret;
+
 	/* TODO: check return value */
 	/* TODO: becareful with order */
-	gpexbe_devicetree_init(*dev);
+	ret = gpexbe_devicetree_init(*dev);
+	if (ret)
+		return ret;
 	gpex_utils_init(dev);
 	gpex_debug_init(dev);
 
@@ -68,9 +72,13 @@ int gpex_platform_init(struct device **dev)
 	gpexbe_llc_coherency_init(dev);
 
 	gpexbe_pm_init();
-	gpexbe_clock_init();
+	ret = gpexbe_clock_init();
+	if (ret)
+		return ret;
 	gpex_pm_init();
-	gpex_clock_init(dev);
+	ret = gpex_clock_init(dev);
+	if (ret)
+		return ret;
 
 	gpexbe_qos_init();
 	gpexbe_bts_init();

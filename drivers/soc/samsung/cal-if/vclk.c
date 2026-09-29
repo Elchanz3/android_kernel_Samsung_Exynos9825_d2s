@@ -1,7 +1,8 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/io.h>
-#include <soc/samsung/ect_parser.h>
+#include <linux/slab.h>
+#include <soc/samsung/exynos-soc_interface.h>
 
 #include "cmucal.h"
 #include "vclk.h"
@@ -355,31 +356,8 @@ int vclk_get_rate_table(unsigned int id, unsigned long *table)
 
 int vclk_get_bigturbo_table(unsigned int *table)
 {
-	void *gen_block;
-	struct ect_gen_param_table *bigturbo;
-	int idx;
-	int i;
-
-	gen_block = ect_get_block("GEN");
-	if (gen_block == NULL)
-		return -EVCLKINVAL;
-
-	bigturbo = ect_gen_param_get_table(gen_block, "BIGTURBO");
-	if (bigturbo == NULL)
-		return -EVCLKINVAL;
-
-	if (bigturbo->num_of_row == 0)
-		return -EVCLKINVAL;
-
-	if (asv_table_ver >= bigturbo->num_of_row)
-		idx = bigturbo->num_of_row - 1;
-	else
-		idx = asv_table_ver;
-
-	for (i = 0; i < bigturbo->num_of_col; i++)
-		table[i] = bigturbo->parameter[idx * bigturbo->num_of_col + i];
-
-	return 0;
+	/* BIGTURBO is absent from the supplied Exynos 9825 catalog. */
+	return -EVCLKNOENT;
 }
 
 unsigned int vclk_get_boot_freq(unsigned int id)
@@ -418,238 +396,91 @@ unsigned int vclk_get_resume_freq(unsigned int id)
 
 static int vclk_get_dfs_info(struct vclk *vclk)
 {
-	int i, j;
-	void *dvfs_block;
-	struct ect_dvfs_domain *dvfs_domain;
-	void *gen_block;
-	struct ect_gen_param_table *minmax = NULL;
-	unsigned int *minmax_table = NULL;
-	int *params, idx;
-	int ret = 0;
-	char buf[32];
+	const struct exynos_soc_catalog_table *levels, *params;
+	unsigned int min_khz, max_khz, boot_khz, resume_khz;
+	int i, j, ret;
 
-	dvfs_block = ect_get_block("DVFS");
-	if (dvfs_block == NULL)
+	levels = exynos_soc_catalog_find("DVFS", vclk->name, "levels",
+					 EXYNOS_SOC_DVFS_LEVELS);
+	params = exynos_soc_catalog_find("DVFS", vclk->name, "params",
+					 EXYNOS_SOC_DVFS_PARAMS);
+	if (!levels || !params)
 		return -EVCLKNOENT;
-
-	dvfs_domain = ect_dvfs_get_domain(dvfs_block, vclk->name);
-	if (dvfs_domain == NULL)
+	if (levels->rows != 1 || !levels->cols ||
+	    levels->cols != params->rows || !params->cols)
 		return -EVCLKINVAL;
 
-	gen_block = ect_get_block("GEN");
-	if (gen_block) {
-		sprintf(buf, "MINMAX_%s", vclk->name);
-		minmax = ect_gen_param_get_table(gen_block, buf);
-		if (minmax != NULL) {
-			for (i = 0; i < minmax->num_of_row; i++) {
-				minmax_table = &minmax->parameter[minmax->num_of_col * i];
-				if (minmax_table[0] == asv_table_ver)
-					break;
-			}
-		}
-	}
+	ret = exynos_soc_get_limits(vclk->name, asv_table_ver,
+				    &min_khz, &max_khz, &boot_khz, &resume_khz);
+	if (ret)
+		return -EVCLKINVAL;
 
-	vclk->num_rates = dvfs_domain->num_of_level;
-	vclk->num_list = dvfs_domain->num_of_clock;
-	vclk->max_freq = dvfs_domain->max_frequency;
-	vclk->min_freq = dvfs_domain->min_frequency;
-
-	if (minmax_table != NULL) {
-		vclk->min_freq = minmax_table[MINMAX_MIN_FREQ] * 1000;
-		vclk->max_freq = minmax_table[MINMAX_MAX_FREQ] * 1000;
-	}
-	pr_debug("ACPM_DVFS :%s\n", vclk->name);
-
-	vclk->list = kzalloc(sizeof(unsigned int) * vclk->num_list, GFP_KERNEL);
+	vclk->num_rates = levels->cols;
+	vclk->num_list = params->cols;
+	vclk->min_freq = min_khz;
+	vclk->max_freq = max_khz;
+	vclk->boot_freq = boot_khz;
+	vclk->resume_freq = resume_khz;
+	vclk->list = kcalloc(vclk->num_list, sizeof(*vclk->list), GFP_KERNEL);
 	if (!vclk->list)
 		return -EVCLKNOMEM;
-
-	vclk->lut = kzalloc(sizeof(struct vclk_lut) * vclk->num_rates,
-			    GFP_KERNEL);
+	vclk->lut = kcalloc(vclk->num_rates, sizeof(*vclk->lut), GFP_KERNEL);
 	if (!vclk->lut) {
 		ret = -EVCLKNOMEM;
-		goto err_nomem1;
+		goto err_list;
 	}
 
 	for (i = 0; i < vclk->num_rates; i++) {
-		vclk->lut[i].rate = dvfs_domain->list_level[i].level;
-		params = kcalloc(vclk->num_list, sizeof(int), GFP_KERNEL);
-		if (!params) {
+		int *row;
+
+		if (levels->data[i] > U32_MAX) {
+			ret = -EVCLKINVAL;
+			goto err_lut;
+		}
+		row = kcalloc(vclk->num_list, sizeof(*row), GFP_KERNEL);
+		if (!row) {
 			ret = -EVCLKNOMEM;
-			if (i == 0)
-				goto err_nomem2;
-			for (i = i-1; i >= 0; i--)
-				kfree(vclk->lut[i].params);
-			goto err_nomem2;
+			goto err_lut;
 		}
+		vclk->lut[i].rate = levels->data[i];
+		vclk->lut[i].params = row;
+		for (j = 0; j < vclk->num_list; j++) {
+			u64 value = params->data[i * vclk->num_list + j];
 
-		for (j = 0; j < vclk->num_list; ++j) {
-			idx = i * vclk->num_list + j;
-			params[j] = dvfs_domain->list_dvfs_value[idx];
+			if (value > INT_MAX) {
+				ret = -EVCLKINVAL;
+				goto err_lut;
+			}
+			row[j] = value;
 		}
-		vclk->lut[i].params = params;
 	}
-	vclk->boot_freq = 0;
-	vclk->resume_freq = 0;
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_VCLK);
+	return 0;
 
-	if (minmax_table != NULL) {
-		for (i = 0; i <  vclk->num_rates; i++) {
-			if (vclk->lut[i].rate == minmax_table[MINMAX_BOOT_FREQ] * 1000)
-				vclk->boot_freq = vclk->lut[i].rate;
-		}
-
-		for (i = 0; i < vclk->num_rates; i++) {
-			if (vclk->lut[i].rate == minmax_table[MINMAX_RESUME_FREQ] * 1000)
-				vclk->resume_freq = vclk->lut[i].rate;
-		}
-	} else{
-		if (dvfs_domain->boot_level_idx != -1)
-			vclk->boot_freq = vclk->lut[dvfs_domain->boot_level_idx].rate;
-
-		if (dvfs_domain->resume_level_idx != -1)
-			vclk->resume_freq = vclk->lut[dvfs_domain->resume_level_idx].rate;
-	}
-
-	return ret;
-err_nomem2:
+err_lut:
+	for (i = 0; i < vclk->num_rates; i++)
+		kfree(vclk->lut[i].params);
 	kfree(vclk->lut);
-err_nomem1:
+	vclk->lut = NULL;
+err_list:
 	kfree(vclk->list);
-
-	return ret;
-}
-
-static struct ect_voltage_table *get_max_min_freq_lv(struct ect_voltage_domain *domain, unsigned int version, int *max_lv, int *min_lv)
-{
-	int i;
-	unsigned int max_asv_version = 0;
-	struct ect_voltage_table *table = NULL;
-
-	for (i = 0; i < domain->num_of_table; i++) {
-		table = &domain->table_list[i];
-		if (version == table->table_version)
-			break;
-
-		if (table->table_version > max_asv_version)
-			max_asv_version = table->table_version;
-	}
-
-	if (i == domain->num_of_table) {
-		pr_err("There is no voltage table, force change %d to %d\n",
-			asv_table_ver, max_asv_version);
-		asv_table_ver = max_asv_version;
-	}
-
-	if (!table) {
-		*max_lv = -1;
-		*min_lv = -1;
-		return NULL;
-	}
-
-	*max_lv = -1;
-	*min_lv = domain->num_of_level - 1;
-	for (i = 0; i < domain->num_of_level; i++) {
-		if (*max_lv == -1 && table->level_en[i])
-			*max_lv = i;
-		if (*max_lv != -1 && !table->level_en[i]) {
-			*min_lv = i - 1;
-			break;
-		}
-	}
-
-	return table;
-}
-
-static int vclk_get_asv_info(struct vclk *vclk)
-{
-	void *asv_block;
-	struct ect_voltage_domain *domain;
-	struct ect_voltage_table *table = NULL;
-	int max_lv, min_lv;
-	int ret = 0;
-	char buf[32];
-	void *gen_block;
-	struct ect_gen_param_table *minmax = NULL;
-
-	asv_block = ect_get_block("ASV");
-	if (asv_block == NULL)
-		return -EVCLKNOENT;
-
-	domain = ect_asv_get_domain(asv_block, vclk->name);
-	if (domain == NULL)
-		return -EVCLKINVAL;
-
-	gen_block = ect_get_block("GEN");
-	if (gen_block) {
-		sprintf(buf, "MINMAX_%s", vclk->name);
-		minmax = ect_gen_param_get_table(gen_block, buf);
-		if (minmax != NULL)
-			goto minmax_skip;
-	}
-
-	table = get_max_min_freq_lv(domain, asv_table_ver, &max_lv, &min_lv);
-	if (table == NULL)
-		return -EVCLKFAULT;
-
-	if (max_lv >= 0)
-		vclk->max_freq = domain->level_list[max_lv] * 1000;
-	else
-		vclk->max_freq = -1;
-
-	if (min_lv >= 0)
-		vclk->min_freq = domain->level_list[min_lv] * 1000;
-	else
-		vclk->min_freq = -1;
-
-	if (table->boot_level_idx >= 0)
-		vclk->boot_freq = domain->level_list[table->boot_level_idx] * 1000;
-	else
-		vclk->boot_freq = -1;
-
-	if (table->resume_level_idx >= 0)
-		vclk->resume_freq = domain->level_list[table->resume_level_idx] * 1000;
-	else
-		vclk->resume_freq = -1;
-
-minmax_skip:
-	pr_debug("   num_rates    : %7d\n", vclk->num_rates);
-	pr_debug("   num_clk_list : %7d\n", vclk->num_list);
-	pr_debug("   max_freq     : %7d\n", vclk->max_freq);
-	pr_debug("   min_freq     : %7d\n", vclk->min_freq);
-	pr_debug("   boot_freq    : %7d\n", vclk->boot_freq);
-	pr_debug("   resume_freq  : %7d\n", vclk->resume_freq);
-
+	vclk->list = NULL;
 	return ret;
 }
 
 static void vclk_bind(void)
 {
 	struct vclk *vclk;
-	int i;
-	bool warn_on = 0;
-	int ret;
+	int i, ret;
 
 	for (i = 0; i < cmucal_get_list_size(ACPM_VCLK_TYPE); i++) {
 		vclk = cmucal_get_node(ACPM_VCLK_TYPE | i);
-		if (!vclk) {
-			pr_err("cannot found vclk node %x\n", i);
+		if (!vclk)
 			continue;
-		}
-
 		ret = vclk_get_dfs_info(vclk);
-		if (ret == -EVCLKNOENT) {
-			if (!warn_on)
-				pr_warn("ECT DVFS not found\n");
-			warn_on = 1;
-		} else if (ret) {
-			pr_err("ECT DVFS [%s] not found %d\n",
-				   vclk->name, ret);
-		} else {
-			ret = vclk_get_asv_info(vclk);
-			if (ret)
-				pr_err("ECT ASV [%s] not found %d\n",
-					vclk->name, ret);
-		}
+		if (ret)
+			pr_err("SoC interface DVFS [%s] unavailable: %d\n",
+				vclk->name, ret);
 	}
 }
 

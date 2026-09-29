@@ -1,6 +1,8 @@
 #ifndef __FVMAP_H__
 #define __FVMAP_H__
 
+#include <linux/types.h>
+
 #define BLOCK_ADDR_SIZE			(3)
 
 /* FV(Frequency Voltage MAP) */
@@ -48,6 +50,7 @@ struct dvfs_table {
 #ifdef CONFIG_ACPM_DVFS
 extern int fvmap_init(void __iomem *sram_base);
 extern int fvmap_get_voltage_table(unsigned int id, unsigned int *table);
+extern bool fvmap_is_interface_ready(unsigned int id);
 #else
 static inline int fvmap_init(void __iomem *sram_base)
 {
@@ -57,6 +60,11 @@ static inline int fvmap_init(void __iomem *sram_base)
 static inline int fvmap_get_voltage_table(unsigned int id, unsigned int *table)
 {
 	return 0;
+}
+
+static inline bool fvmap_is_interface_ready(unsigned int id)
+{
+	return false;
 }
 #endif
 #endif

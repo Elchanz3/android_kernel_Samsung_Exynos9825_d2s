@@ -32,9 +32,7 @@
 #if defined(CONFIG_PCI_EXYNOS)
 #include <linux/exynos-pci-ctrl.h>
 #endif
-#if defined(CONFIG_ECT)
-#include <soc/samsung/ect_parser.h>
-#endif
+#include <soc/samsung/exynos-soc_interface.h>
 #include <soc/samsung/cal-if.h>
 #include <trace/events/napi.h>
 #include "modem_prj.h"
@@ -3283,62 +3281,40 @@ void shmem_restore_mif_freq(struct mem_link_device *mld)
 	}
 }
 
-#if defined(CONFIG_ECT)
-static int exynos_devfreq_parse_ect(struct mem_link_device *mld, char *dvfs_domain_name)
+static int exynos_devfreq_parse_soc(struct mem_link_device *mld, char *dvfs_domain_name)
 {
+	const struct exynos_soc_catalog_table *levels;
+	struct freq_table *table;
 	int i, counter = 0;
-	void *dvfs_block;
-	struct ect_dvfs_domain *dvfs_domain;
 
-	dvfs_block = ect_get_block(BLOCK_DVFS);
-	if (dvfs_block == NULL)
-		return -ENODEV;
+	levels = exynos_soc_catalog_find("DVFS", dvfs_domain_name, "levels",
+					 EXYNOS_SOC_DVFS_LEVELS);
+	if (!levels || levels->rows != 1 || !levels->cols ||
+	    levels->cols > FREQ_MAX_LV)
+		return -EINVAL;
 
-	dvfs_domain = ect_dvfs_get_domain(dvfs_block, (char *)dvfs_domain_name);
-	if (dvfs_domain == NULL)
-		return -ENODEV;
+	if (!strcmp(dvfs_domain_name, "dvfs_mif"))
+		table = &mld->mif_table;
+	else if (!strcmp(dvfs_domain_name, "dvfs_cpucl0"))
+		table = &mld->cl0_table;
+	else if (!strcmp(dvfs_domain_name, "dvfs_cpucl1"))
+		table = &mld->cl1_table;
+	else if (!strcmp(dvfs_domain_name, "dvfs_int"))
+		table = &mld->int_table;
+	else
+		return -EINVAL;
 
-	if (!strcmp(dvfs_domain_name, "dvfs_mif")) {
-		mld->mif_table.num_of_table = dvfs_domain->num_of_level;
-		for (i = dvfs_domain->num_of_level - 1; i >= 0; i--) {
-			mld->mif_table.freq[i] = dvfs_domain->list_level[counter++].level;
-			mif_err("MIF_LEV[%d] : %u\n", i + 1, mld->mif_table.freq[i]);
-		}
-	} else if (!strcmp(dvfs_domain_name, "dvfs_cpucl0")) {
-		mld->cl0_table.num_of_table = dvfs_domain->num_of_level;
-		for (i = dvfs_domain->num_of_level - 1; i >= 0; i--) {
-			mld->cl0_table.freq[i] = dvfs_domain->list_level[counter++].level;
-			mif_err("CL0_LEV[%d] : %u\n", i + 1, mld->cl0_table.freq[i]);
-		}
-	} else if (!strcmp(dvfs_domain_name, "dvfs_cpucl1")) {
-		mld->cl1_table.num_of_table = dvfs_domain->num_of_level;
-		for (i = dvfs_domain->num_of_level - 1; i >= 0; i--) {
-			mld->cl1_table.freq[i] = dvfs_domain->list_level[counter++].level;
-			mif_err("CL1_LEV[%d] : %u\n", i + 1, mld->cl1_table.freq[i]);
-		}
-	} else if (!strcmp(dvfs_domain_name, "dvfs_int")) {
-		mld->int_table.num_of_table = dvfs_domain->num_of_level;
-		for (i = dvfs_domain->num_of_level - 1; i >= 0; i--) {
-			mld->int_table.freq[i] = dvfs_domain->list_level[counter++].level;
-			mif_err("INT_LEV[%d] : %u\n", i + 1, mld->int_table.freq[i]);
-		}
+	for (i = levels->cols - 1; i >= 0; i--) {
+		if (levels->data[counter] > U32_MAX)
+			return -ERANGE;
+		table->freq[i] = levels->data[counter++];
+		mif_err("%s_LEV[%d] : %u\n", dvfs_domain_name, i + 1,
+			table->freq[i]);
 	}
-
+	table->num_of_table = levels->cols;
 	return 0;
 }
-#else
-static int exynos_devfreq_parse_ect(struct mem_link_device *mld, char *dvfs_domain_name)
-{
-	mif_err("ECT is not defined(%s)\n", __func__);
 
-	mld->cl0_table.num_of_table = 0;
-	mld->cl1_table.num_of_table = 0;
-	mld->mif_table.num_of_table = 0;
-	mld->int_table.num_of_table = 0;
-
-	return 0;
-}
-#endif
 
 static void remap_4mb_map_to_ipc_dev(struct mem_link_device *mld)
 {
@@ -3352,7 +3328,7 @@ static void remap_4mb_map_to_ipc_dev(struct mem_link_device *mld)
 	mld->magic = (u32 __iomem *)&map->magic;
 	mld->access = (u32 __iomem *)&map->access;
 
-	/* To share ECT clock table with CP */
+	/* Share SoC interface clock levels with CP. */
 	mld->clk_table = (u32 __iomem *)map->reserved;
 
 	/* IPC_MAP_FMT */
@@ -4113,22 +4089,22 @@ struct link_device *shmem_create_link_device(struct platform_device *pdev)
 
 	/* Parsing devfreq, cpufreq table from ECT */
 	mif_err("Parsing MIF table...\n");
-	err = exynos_devfreq_parse_ect(mld, "dvfs_mif");
+	err = exynos_devfreq_parse_soc(mld, "dvfs_mif");
 	if (err < 0)
 		mif_err("Can't get MIF table!!!!!\n");
 
 	mif_err("Parsing CL0 table...\n");
-	err = exynos_devfreq_parse_ect(mld, "dvfs_cpucl0");
+	err = exynos_devfreq_parse_soc(mld, "dvfs_cpucl0");
 	if (err < 0)
 		mif_err("Can't get CPU table!!!!!\n");
 
 	mif_err("Parsing CL1 table...\n");
-	err = exynos_devfreq_parse_ect(mld, "dvfs_cpucl1");
+	err = exynos_devfreq_parse_soc(mld, "dvfs_cpucl1");
 	if (err < 0)
 		mif_err("Can't get CPU table!!!!!\n");
 
 	mif_err("Parsing INT table...\n");
-	err = exynos_devfreq_parse_ect(mld, "dvfs_int");
+	err = exynos_devfreq_parse_soc(mld, "dvfs_int");
 	if (err < 0)
 		mif_err("Can't get INT table!!!!!\n");
 

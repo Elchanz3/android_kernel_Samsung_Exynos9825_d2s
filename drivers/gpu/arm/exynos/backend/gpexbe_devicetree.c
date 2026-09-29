@@ -22,6 +22,7 @@
 #include <linux/of.h>
 #include <linux/sysfs.h>
 #include <linux/slab.h>
+#include <soc/samsung/exynos-soc_interface.h>
 
 #include <gpex_utils.h>
 #include <gpexbe_devicetree.h>
@@ -108,38 +109,38 @@ static int read_interactive_info_array(void)
 
 static int build_clk_table(void)
 {
-	int array_size = dt_info.gpu_dvfs_table_size.row * dt_info.gpu_dvfs_table_size.col;
-	u32 *raw_table;
-	int row = 0;
+	const struct exynos_soc_catalog_table *levels;
+	const struct exynos_soc_gpu_policy *policy;
+	int row;
 
-	if (array_size <= 0) {
-		/* TODO: print error message */
+	levels = exynos_soc_catalog_find("DVFS", "dvfs_g3d", "levels",
+					 EXYNOS_SOC_DVFS_LEVELS);
+	if (!levels || levels->rows != 1 || !levels->cols)
 		return -EINVAL;
-	}
 
-	raw_table = kcalloc(array_size, sizeof(*raw_table), GFP_KERNEL);
-
-	if (!raw_table)
+	clock_table = kcalloc(levels->cols, sizeof(*clock_table), GFP_KERNEL);
+	if (!clock_table)
 		return -ENOMEM;
 
-	gpexbe_devicetree_read_u32_array("gpu_dvfs_table", raw_table, array_size);
+	for (row = 0; row < levels->cols; row++) {
+		policy = exynos_soc_gpu_policy_get(row);
+		if (!policy || levels->data[row] > INT_MAX) {
+			kfree(clock_table);
+			clock_table = NULL;
+			return -EINVAL;
+		}
 
-	clock_table = kcalloc(dt_info.gpu_dvfs_table_size.row, sizeof(*clock_table), GFP_KERNEL);
-
-	for (row = 0; row < dt_info.gpu_dvfs_table_size.row; row++) {
-		int table_idx = row * dt_info.gpu_dvfs_table_size.col;
-
-		clock_table[row].clock = raw_table[table_idx];
-		clock_table[row].min_threshold = raw_table[table_idx + 1];
-		clock_table[row].max_threshold = raw_table[table_idx + 2];
-		clock_table[row].down_staycount = raw_table[table_idx + 3];
-		clock_table[row].mem_freq = raw_table[table_idx + 4];
-		clock_table[row].cpu_little_min_freq = raw_table[table_idx + 5];
+		clock_table[row].clock = levels->data[row];
+		clock_table[row].min_threshold = policy->min_threshold;
+		clock_table[row].max_threshold = policy->max_threshold;
+		clock_table[row].down_staycount = policy->down_staycount;
+		clock_table[row].mem_freq = policy->mem_freq;
+		clock_table[row].cpu_little_min_freq = policy->cpu_little_min_freq;
 
 		if (dt_info.gpu_pmqos_cpu_cluster_num == 3) {
-			clock_table[row].cpu_middle_min_freq = raw_table[table_idx + 6];
+			clock_table[row].cpu_middle_min_freq = policy->cpu_middle_min_freq;
 			clock_table[row].cpu_big_max_freq =
-				(raw_table[table_idx + 7] ? raw_table[table_idx + 7] : CPU_MAX);
+				policy->cpu_big_max_freq ?: CPU_MAX;
 
 			GPU_LOG(MALI_EXYNOS_INFO,
 				"up [%d] down [%d] staycnt [%d] mif [%d] lit [%d] mid [%d] big [%d]\n",
@@ -151,7 +152,7 @@ static int build_clk_table(void)
 		} else {
 			// Assuming cpu cluster number is 2
 			clock_table[row].cpu_big_max_freq =
-				(raw_table[table_idx + 6] ? raw_table[table_idx + 6] : CPU_MAX);
+				policy->cpu_middle_min_freq ?: CPU_MAX;
 
 			GPU_LOG(MALI_EXYNOS_INFO,
 				"up [%d] down [%d] staycnt [%d] mif [%d] lit [%d] big [%d]\n",
@@ -162,58 +163,30 @@ static int build_clk_table(void)
 		}
 
 #if IS_ENABLED(CONFIG_SOC_EXYNOS2100)
-		clock_table[row].llc_ways = raw_table[table_idx + 8];
+		clock_table[row].llc_ways = policy->llc_ways;
 #endif
 	}
 
-	//	GPU_LOG(MALI_EXYNOS_WARNING, "G3D %7dKhz ASV is %duV\n", cal_freq, cal_vol);
-
-	kfree(raw_table);
+	dt_info.gpu_dvfs_table_size.row = levels->cols;
+	dt_info.gpu_dvfs_table_size.col = 8;
 
 	return 0;
 }
 
 static int build_cl_pmqos_table(void)
 {
-	int array_size = dt_info.gpu_cl_pmqos_table_size.row * dt_info.gpu_cl_pmqos_table_size.col;
-	u32 *raw_table;
-	int row = 0;
+	int num_rows = dt_info.gpu_dvfs_table_size.row;
+	int row;
 
-	if (array_size <= 0) {
-		int num_rows = dt_info.gpu_dvfs_table_size.row;
-
-		clqos_table = kcalloc(num_rows, sizeof(*clqos_table), GFP_KERNEL);
-
-		for (row = 0; row < num_rows; row++)
-			clqos_table[row].clock = clock_table[row].clock;
-
-		dt_info.gpu_cl_pmqos_table_size.row = num_rows;
-		dt_info.gpu_cl_pmqos_table_size.col = 1;
-
-		return 0;
-	}
-
-	raw_table = kcalloc(array_size, sizeof(*raw_table), GFP_KERNEL);
-
-	if (!raw_table)
+	clqos_table = kcalloc(num_rows, sizeof(*clqos_table), GFP_KERNEL);
+	if (!clqos_table)
 		return -ENOMEM;
 
-	gpexbe_devicetree_read_u32_array("gpu_cl_pmqos_table", raw_table, array_size);
+	for (row = 0; row < num_rows; row++)
+		clqos_table[row].clock = clock_table[row].clock;
 
-	clqos_table =
-		kcalloc(dt_info.gpu_cl_pmqos_table_size.row, sizeof(*clqos_table), GFP_KERNEL);
-
-	for (row = 0; row < dt_info.gpu_cl_pmqos_table_size.row; row++) {
-		int table_idx = row * dt_info.gpu_cl_pmqos_table_size.col;
-
-		clqos_table[row].clock = raw_table[table_idx];
-		clqos_table[row].mif_min = raw_table[table_idx + 1];
-		clqos_table[row].little_min = raw_table[table_idx + 2];
-		clqos_table[row].middle_min = raw_table[table_idx + 3];
-		clqos_table[row].big_max = raw_table[table_idx + 4];
-	}
-
-	kfree(raw_table);
+	dt_info.gpu_cl_pmqos_table_size.row = num_rows;
+	dt_info.gpu_cl_pmqos_table_size.col = 1;
 
 	return 0;
 }
@@ -227,14 +200,7 @@ static void read_from_dt(void)
 	gpexbe_devicetree_read_string("g3d_genpd_name", &dt_info.g3d_genpd_name);
 
 	/* CLOCK */
-	gpexbe_devicetree_read_u32("gpu_max_clock", &dt_info.gpu_max_clock);
-	gpexbe_devicetree_read_u32("gpu_min_clock", &dt_info.gpu_min_clock);
 	gpexbe_devicetree_read_u32("gpu_pmqos_cpu_cluster_num", &dt_info.gpu_pmqos_cpu_cluster_num);
-
-	gpexbe_devicetree_read_u32_array("gpu_dvfs_table_size", (int *)&dt_info.gpu_dvfs_table_size,
-					 2);
-	gpexbe_devicetree_read_u32_array("gpu_cl_pmqos_table_size",
-					 (int *)&dt_info.gpu_cl_pmqos_table_size, 2);
 
 	/* DEBUG_BACKEND */
 	gpexbe_devicetree_read_u32("gpu_ess_id_type", &dt_info.gpu_ess_id_type);
@@ -309,16 +275,26 @@ gpu_dt *gpexbe_devicetree_get_gpu_dt(void)
 
 int gpexbe_devicetree_init(struct device *dev)
 {
+	int ret;
+
 	dt_info.dev = dev;
 	read_from_dt();
-	build_clk_table();
-	build_cl_pmqos_table();
+	ret = build_clk_table();
+	if (ret)
+		return ret;
+	ret = build_cl_pmqos_table();
+	if (ret) {
+		kfree(clock_table);
+		clock_table = NULL;
+		return ret;
+	}
 	read_interactive_info_array();
 
 	dt_info.gpu_dvfs_table = clock_table;
 	dt_info.gpu_cl_pmqos_table = clqos_table;
 
 	dt_info.initialized = 1;
+	exynos_soc_note_consumer(EXYNOS_SOC_CONSUMER_GPU);
 
 	return 0;
 }

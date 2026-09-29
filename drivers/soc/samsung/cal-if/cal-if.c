@@ -2,6 +2,7 @@
 #include <linux/debug-snapshot.h>
 #include <soc/samsung/ect_parser.h>
 #include <soc/samsung/cal-if.h>
+#include <soc/samsung/exynos-soc_interface.h>
 #ifdef CONFIG_EXYNOS9820_BTS
 #include <soc/samsung/bts.h>
 #endif
@@ -60,6 +61,8 @@ int cal_dfs_set_rate(unsigned int id, unsigned long rate)
 	int ret;
 
 	if (IS_ACPM_VCLK(id)) {
+		if (!fvmap_is_interface_ready(id))
+			return -EINVAL;
 		if (cal_check_hiu_dvfs_id && cal_check_hiu_dvfs_id(id))
 			ret = exynos_hiu_set_freq(id, rate);
 		else
@@ -435,6 +438,10 @@ int __init cal_if_init(void *dev)
 
 	if (cal_initialized == 1)
 		return 0;
+
+	ret = exynos_soc_interface_early_init();
+	if (ret)
+		return ret;
 
 	ect_parse_binary_header();
 

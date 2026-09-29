@@ -19,6 +19,8 @@
  */
 
 #include <linux/slab.h>
+#include <soc/samsung/cal-if.h>
+#include <soc/samsung/exynos-soc_interface.h>
 
 #include <gpex_clock.h>
 #include <gpex_qos.h>
@@ -78,46 +80,61 @@ u64 gpex_clock_get_time_busy(int level)
  ******************************************/
 static int gpex_clock_update_config_data_from_dt()
 {
-	int ret = 0;
+	int ret;
 	struct freq_volt *fv_array;
 	int asv_lv_num;
-	int i, j;
+	unsigned int min_khz, max_khz, boot_khz, resume_khz;
+	int i;
 
-	clk_info.gpu_max_clock = gpexbe_devicetree_get_int(gpu_max_clock);
-	clk_info.gpu_min_clock = gpexbe_devicetree_get_int(gpu_min_clock);
+	ret = exynos_soc_get_limits("dvfs_g3d", cal_asv_get_tablever(),
+				    &min_khz, &max_khz, &boot_khz, &resume_khz);
+	if (ret)
+		return ret;
 	clk_info.boot_clock = gpexbe_clock_get_boot_freq();
 	clk_info.gpu_max_clock_limit = gpexbe_clock_get_max_freq();
+	clk_info.gpu_max_clock = clk_info.gpu_max_clock_limit;
 
 	/* TODO: rename the table_size variable to something more sensible like  row_cnt */
 	clk_info.table_size = gpexbe_devicetree_get_int(gpu_dvfs_table_size.row);
 	clk_info.table = kcalloc(clk_info.table_size, sizeof(gpu_clock_info), GFP_KERNEL);
-
-	asv_lv_num = gpexbe_clock_get_level_num();
-	fv_array = kcalloc(asv_lv_num, sizeof(*fv_array), GFP_KERNEL);
-
-	if (!fv_array)
+	if (!clk_info.table)
 		return -ENOMEM;
 
+	asv_lv_num = gpexbe_clock_get_level_num();
+	if (asv_lv_num != clk_info.table_size) {
+		kfree(clk_info.table);
+		clk_info.table = NULL;
+		return -EINVAL;
+	}
+	fv_array = kcalloc(asv_lv_num, sizeof(*fv_array), GFP_KERNEL);
+
+	if (!fv_array) {
+		kfree(clk_info.table);
+		clk_info.table = NULL;
+		return -ENOMEM;
+	}
+
 	ret = gpexbe_clock_get_rate_asv_table(fv_array, asv_lv_num);
-	if (!ret)
-		GPU_LOG(MALI_EXYNOS_ERROR, "Failed to get G3D ASV table from CAL IF\n");
+	if (ret != asv_lv_num) {
+		kfree(fv_array);
+		kfree(clk_info.table);
+		clk_info.table = NULL;
+		return ret < 0 ? ret : -EINVAL;
+	}
 
 	for (i = 0; i < asv_lv_num; i++) {
-		int cal_freq = fv_array[i].freq;
-		int cal_vol = fv_array[i].volt;
-		dt_clock_item *dt_clock_table = gpexbe_devicetree_get_clock_table();
-
-		if (cal_freq <= clk_info.gpu_max_clock && cal_freq >= clk_info.gpu_min_clock) {
-			for (j = 0; j < clk_info.table_size; j++) {
-				if (cal_freq == dt_clock_table[j].clock) {
-					clk_info.table[j].clock = cal_freq;
-					clk_info.table[j].voltage = cal_vol;
-				}
-			}
-		}
+		clk_info.table[i].clock = fv_array[i].freq;
+		clk_info.table[i].voltage = fv_array[i].volt;
+		if (fv_array[i].freq >= min_khz)
+			clk_info.gpu_min_clock = fv_array[i].freq;
 	}
 
 	kfree(fv_array);
+	if (!clk_info.gpu_min_clock) {
+		kfree(clk_info.table);
+		clk_info.table = NULL;
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -310,6 +327,7 @@ static int gpu_check_target_clock(int clock)
 int gpex_clock_init(struct device **dev)
 {
 	int i = 0;
+	int ret;
 
 	mutex_init(&clk_info.clock_lock);
 	clk_info.kbdev = container_of(dev, struct kbase_device, dev);
@@ -321,7 +339,9 @@ int gpex_clock_init(struct device **dev)
 		clk_info.user_min_lock[i] = 0;
 	}
 
-	gpex_clock_update_config_data_from_dt();
+	ret = gpex_clock_update_config_data_from_dt();
+	if (ret)
+		return ret;
 	gpex_clock_init_time_in_state();
 	gpex_clock_sysfs_init(&clk_info);
 

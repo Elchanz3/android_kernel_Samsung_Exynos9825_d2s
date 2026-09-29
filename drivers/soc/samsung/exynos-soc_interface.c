@@ -7,8 +7,12 @@
  */
 #include <linux/errno.h>
 #include <linux/export.h>
+#include <linux/init.h>
 #include <linux/kernel.h>
+#include <linux/kobject.h>
 #include <linux/string.h>
+#include <linux/sysfs.h>
+#include <linux/atomic.h>
 #include <soc/samsung/exynos-soc_interface.h>
 
 static const u64 exynos_soc_pll_pll_cpucl0_rates_0[] = {
@@ -60,15 +64,20 @@ static const u64 exynos_soc_pll_pll_cpucl2_rates_2[] = {
 };
 
 static const u64 exynos_soc_pll_pll_g3d_rates_3[] = {
-	754000000ULL, 4ULL, 116ULL, 0ULL, 0ULL, 702000000ULL, 4ULL, 108ULL,
-	0ULL, 0ULL, 676000000ULL, 4ULL, 104ULL, 0ULL, 0ULL, 650000000ULL,
-	4ULL, 100ULL, 0ULL, 0ULL, 598000000ULL, 4ULL, 184ULL, 1ULL,
-	0ULL, 572000000ULL, 4ULL, 176ULL, 1ULL, 0ULL, 432250000ULL, 4ULL,
-	133ULL, 1ULL, 0ULL, 377000000ULL, 4ULL, 116ULL, 1ULL, 0ULL,
-	325000000ULL, 4ULL, 100ULL, 1ULL, 0ULL, 260000000ULL, 4ULL, 160ULL,
-	2ULL, 0ULL, 199875000ULL, 4ULL, 123ULL, 2ULL, 0ULL, 156000000ULL,
-	4ULL, 96ULL, 2ULL, 0ULL, 99937000ULL, 4ULL, 123ULL, 3ULL,
-	0ULL,
+	/* 26 MHz reference, P=13, S=0: exact 2 MHz M steps. */
+	1200000000ULL, 13ULL, 600ULL, 0ULL, 0ULL,
+	1100000000ULL, 13ULL, 550ULL, 0ULL, 0ULL,
+	1000000000ULL, 13ULL, 500ULL, 0ULL, 0ULL,
+	900000000ULL, 13ULL, 450ULL, 0ULL, 0ULL,
+	850000000ULL, 13ULL, 425ULL, 0ULL, 0ULL,
+	800000000ULL, 13ULL, 400ULL, 0ULL, 0ULL,
+	754000000ULL, 4ULL, 116ULL, 0ULL, 0ULL,
+	676000000ULL, 4ULL, 104ULL, 0ULL, 0ULL,
+	572000000ULL, 4ULL, 176ULL, 1ULL, 0ULL,
+	432250000ULL, 4ULL, 133ULL, 1ULL, 0ULL,
+	377000000ULL, 4ULL, 116ULL, 1ULL, 0ULL,
+	260000000ULL, 4ULL, 160ULL, 2ULL, 0ULL,
+	156000000ULL, 4ULL, 96ULL, 2ULL, 0ULL,
 };
 
 static const u64 exynos_soc_pll_pll_mif_rates_4[] = {
@@ -180,8 +189,9 @@ static const u64 exynos_soc_dvfs_dvfs_cpucl2_params_17[] = {
 };
 
 static const u64 exynos_soc_dvfs_dvfs_g3d_levels_18[] = {
-	754000ULL, 676000ULL, 650000ULL, 598000ULL, 572000ULL, 433000ULL, 377000ULL, 325000ULL,
-	260000ULL, 200000ULL, 156000ULL, 100000ULL,
+	1200000ULL, 1100000ULL, 1000000ULL, 900000ULL, 850000ULL,
+	800000ULL, 754000ULL, 676000ULL, 572000ULL, 433000ULL,
+	377000ULL, 260000ULL, 156000ULL,
 };
 
 static const u64 exynos_soc_dvfs_dvfs_g3d_sfr_19[] = {
@@ -189,8 +199,8 @@ static const u64 exynos_soc_dvfs_dvfs_g3d_sfr_19[] = {
 };
 
 static const u64 exynos_soc_dvfs_dvfs_g3d_params_20[] = {
-	1ULL, 2ULL, 3ULL, 4ULL, 5ULL, 6ULL, 7ULL, 8ULL,
-	9ULL, 10ULL, 11ULL, 12ULL,
+	0ULL, 1ULL, 2ULL, 3ULL, 4ULL, 5ULL, 6ULL, 7ULL,
+	8ULL, 9ULL, 10ULL, 11ULL, 12ULL,
 };
 
 static const u64 exynos_soc_dvfs_dvfs_mif_levels_21[] = {
@@ -1137,196 +1147,308 @@ static const u64 exynos_soc_asv_dvfs_cpucl2_v32_73[] = {
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_freq_mhz_74[] = {
-	702ULL, 676ULL, 650ULL, 598ULL, 572ULL, 433ULL, 377ULL, 325ULL,
-	260ULL, 200ULL, 156ULL, 100ULL,
+	1200ULL, 1100ULL, 1000ULL, 900ULL, 850ULL, 800ULL, 754ULL,
+	676ULL, 572ULL, 433ULL, 377ULL, 260ULL, 156ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v0_75[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1150000ULL, 1143750ULL, 1118750ULL, 1093750ULL, 1075000ULL, 1056250ULL, 1031250ULL, 1006250ULL,
+	987500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	1081250ULL, 1075000ULL, 1050000ULL, 1025000ULL, 1006250ULL, 987500ULL, 962500ULL, 937500ULL,
+	918750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	1012500ULL, 1006250ULL, 981250ULL, 956250ULL, 937500ULL, 918750ULL, 893750ULL, 868750ULL,
+	850000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	943750ULL, 937500ULL, 912500ULL, 887500ULL, 868750ULL, 850000ULL, 825000ULL, 800000ULL,
+	781250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	912500ULL, 906250ULL, 881250ULL, 856250ULL, 837500ULL, 818750ULL, 793750ULL, 768750ULL,
+	750000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	875000ULL, 868750ULL, 843750ULL, 818750ULL, 800000ULL, 781250ULL, 756250ULL, 731250ULL,
+	712500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	843750ULL, 837500ULL, 812500ULL, 787500ULL, 768750ULL, 750000ULL, 725000ULL, 700000ULL,
 	681250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	756250ULL, 750000ULL, 725000ULL, 700000ULL, 675000ULL, 656250ULL, 631250ULL, 606250ULL,
 	581250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	750000ULL, 743750ULL, 718750ULL, 693750ULL, 668750ULL, 650000ULL, 625000ULL, 600000ULL,
-	575000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	737500ULL, 731250ULL, 706250ULL, 681250ULL, 656250ULL, 637500ULL, 612500ULL, 587500ULL,
-	562500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	731250ULL, 725000ULL, 700000ULL, 675000ULL, 650000ULL, 625000ULL, 600000ULL, 575000ULL,
 	550000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	706250ULL, 700000ULL, 681250ULL, 656250ULL, 637500ULL, 612500ULL, 593750ULL, 568750ULL,
 	550000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	687500ULL, 681250ULL, 656250ULL, 637500ULL, 618750ULL, 593750ULL, 575000ULL, 556250ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	662500ULL, 656250ULL, 637500ULL, 612500ULL, 593750ULL, 575000ULL, 556250ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	662500ULL, 656250ULL, 637500ULL, 612500ULL, 593750ULL, 575000ULL, 556250ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	643750ULL, 637500ULL, 618750ULL, 600000ULL, 575000ULL, 556250ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	625000ULL, 625000ULL, 600000ULL, 581250ULL, 562500ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	625000ULL, 625000ULL, 600000ULL, 581250ULL, 562500ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v1_76[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1106250ULL, 1106250ULL, 1093750ULL, 1081250ULL, 1068750ULL, 1056250ULL, 1043750ULL, 1025000ULL,
+	1012500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	1037500ULL, 1037500ULL, 1025000ULL, 1012500ULL, 1000000ULL, 987500ULL, 975000ULL, 956250ULL,
+	943750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	968750ULL, 968750ULL, 956250ULL, 943750ULL, 931250ULL, 918750ULL, 906250ULL, 887500ULL,
+	875000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	900000ULL, 900000ULL, 887500ULL, 875000ULL, 862500ULL, 850000ULL, 837500ULL, 818750ULL,
+	806250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	868750ULL, 868750ULL, 856250ULL, 843750ULL, 831250ULL, 818750ULL, 806250ULL, 787500ULL,
+	775000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	831250ULL, 831250ULL, 818750ULL, 806250ULL, 793750ULL, 781250ULL, 768750ULL, 750000ULL,
+	737500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	800000ULL, 800000ULL, 787500ULL, 775000ULL, 762500ULL, 750000ULL, 737500ULL, 718750ULL,
 	706250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	775000ULL, 775000ULL, 762500ULL, 743750ULL, 731250ULL, 718750ULL, 706250ULL, 693750ULL,
 	681250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	768750ULL, 768750ULL, 756250ULL, 743750ULL, 731250ULL, 718750ULL, 706250ULL, 687500ULL,
-	675000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	756250ULL, 756250ULL, 737500ULL, 725000ULL, 712500ULL, 700000ULL, 687500ULL, 675000ULL,
-	662500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	750000ULL, 750000ULL, 737500ULL, 725000ULL, 712500ULL, 700000ULL, 687500ULL, 668750ULL,
 	656250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	737500ULL, 731250ULL, 718750ULL, 706250ULL, 693750ULL, 681250ULL, 668750ULL, 656250ULL,
 	643750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	706250ULL, 706250ULL, 693750ULL, 675000ULL, 662500ULL, 650000ULL, 637500ULL, 625000ULL,
 	612500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	681250ULL, 681250ULL, 668750ULL, 656250ULL, 643750ULL, 631250ULL, 618750ULL, 600000ULL,
-	587500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	668750ULL, 668750ULL, 656250ULL, 643750ULL, 631250ULL, 618750ULL, 606250ULL, 587500ULL,
 	575000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	668750ULL, 668750ULL, 656250ULL, 643750ULL, 631250ULL, 618750ULL, 606250ULL, 587500ULL,
-	575000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	650000ULL, 643750ULL, 631250ULL, 618750ULL, 606250ULL, 593750ULL, 581250ULL, 568750ULL,
 	556250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	631250ULL, 631250ULL, 612500ULL, 600000ULL, 587500ULL, 575000ULL, 562500ULL, 550000ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v2_77[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1093750ULL, 1087500ULL, 1068750ULL, 1043750ULL, 1025000ULL, 1000000ULL, 981250ULL, 956250ULL,
+	937500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	1025000ULL, 1018750ULL, 1000000ULL, 975000ULL, 956250ULL, 931250ULL, 912500ULL, 887500ULL,
+	868750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	956250ULL, 950000ULL, 931250ULL, 906250ULL, 887500ULL, 862500ULL, 843750ULL, 818750ULL,
+	800000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	887500ULL, 881250ULL, 862500ULL, 837500ULL, 818750ULL, 793750ULL, 775000ULL, 750000ULL,
+	731250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	856250ULL, 850000ULL, 831250ULL, 806250ULL, 787500ULL, 762500ULL, 743750ULL, 718750ULL,
+	700000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	818750ULL, 812500ULL, 793750ULL, 768750ULL, 750000ULL, 725000ULL, 706250ULL, 681250ULL,
+	662500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	787500ULL, 781250ULL, 762500ULL, 737500ULL, 718750ULL, 693750ULL, 675000ULL, 650000ULL,
 	631250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	775000ULL, 768750ULL, 750000ULL, 725000ULL, 706250ULL, 687500ULL, 668750ULL, 643750ULL,
 	625000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	762500ULL, 762500ULL, 743750ULL, 718750ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL,
-	625000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	743750ULL, 743750ULL, 725000ULL, 706250ULL, 687500ULL, 668750ULL, 650000ULL, 631250ULL,
-	612500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	737500ULL, 737500ULL, 718750ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 625000ULL,
 	606250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	731250ULL, 725000ULL, 706250ULL, 687500ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL,
 	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	706250ULL, 706250ULL, 687500ULL, 675000ULL, 656250ULL, 637500ULL, 625000ULL, 606250ULL,
 	587500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	662500ULL, 662500ULL, 643750ULL, 631250ULL, 612500ULL, 600000ULL, 581250ULL, 562500ULL,
-	550000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	637500ULL, 637500ULL, 618750ULL, 606250ULL, 587500ULL, 575000ULL, 562500ULL, 543750ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	637500ULL, 637500ULL, 618750ULL, 606250ULL, 587500ULL, 575000ULL, 562500ULL, 543750ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	600000ULL, 600000ULL, 581250ULL, 568750ULL, 556250ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	587500ULL, 587500ULL, 568750ULL, 556250ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v3_78[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1081250ULL, 1075000ULL, 1056250ULL, 1031250ULL, 1012500ULL, 987500ULL, 968750ULL, 943750ULL,
+	925000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	1012500ULL, 1006250ULL, 987500ULL, 962500ULL, 943750ULL, 918750ULL, 900000ULL, 875000ULL,
+	856250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	943750ULL, 937500ULL, 918750ULL, 893750ULL, 875000ULL, 850000ULL, 831250ULL, 806250ULL,
+	787500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	875000ULL, 868750ULL, 850000ULL, 825000ULL, 806250ULL, 781250ULL, 762500ULL, 737500ULL,
+	718750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	843750ULL, 837500ULL, 818750ULL, 793750ULL, 775000ULL, 750000ULL, 731250ULL, 706250ULL,
+	687500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	806250ULL, 800000ULL, 781250ULL, 756250ULL, 737500ULL, 712500ULL, 693750ULL, 668750ULL,
+	650000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	775000ULL, 768750ULL, 750000ULL, 725000ULL, 706250ULL, 681250ULL, 662500ULL, 637500ULL,
 	618750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	750000ULL, 743750ULL, 725000ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 618750ULL,
 	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	737500ULL, 737500ULL, 718750ULL, 693750ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL,
-	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	718750ULL, 718750ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 625000ULL, 606250ULL,
-	587500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	712500ULL, 712500ULL, 693750ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL, 600000ULL,
 	581250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	712500ULL, 706250ULL, 687500ULL, 668750ULL, 656250ULL, 637500ULL, 618750ULL, 600000ULL,
 	581250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	675000ULL, 675000ULL, 656250ULL, 643750ULL, 625000ULL, 606250ULL, 593750ULL, 575000ULL,
 	556250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	643750ULL, 643750ULL, 625000ULL, 612500ULL, 593750ULL, 581250ULL, 562500ULL, 543750ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	625000ULL, 625000ULL, 606250ULL, 593750ULL, 575000ULL, 562500ULL, 550000ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	618750ULL, 618750ULL, 600000ULL, 587500ULL, 562500ULL, 556250ULL, 543750ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	587500ULL, 587500ULL, 568750ULL, 556250ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	562500ULL, 562500ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v4_79[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1068750ULL, 1068750ULL, 1043750ULL, 1025000ULL, 1000000ULL, 981250ULL, 962500ULL, 937500ULL,
+	918750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	1000000ULL, 1000000ULL, 975000ULL, 956250ULL, 931250ULL, 912500ULL, 893750ULL, 868750ULL,
+	850000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	931250ULL, 931250ULL, 906250ULL, 887500ULL, 862500ULL, 843750ULL, 825000ULL, 800000ULL,
+	781250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	862500ULL, 862500ULL, 837500ULL, 818750ULL, 793750ULL, 775000ULL, 756250ULL, 731250ULL,
+	712500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	831250ULL, 831250ULL, 806250ULL, 787500ULL, 762500ULL, 743750ULL, 725000ULL, 700000ULL,
+	681250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	793750ULL, 793750ULL, 768750ULL, 750000ULL, 725000ULL, 706250ULL, 687500ULL, 662500ULL,
+	643750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	762500ULL, 762500ULL, 737500ULL, 718750ULL, 693750ULL, 675000ULL, 656250ULL, 631250ULL,
 	612500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	750000ULL, 743750ULL, 725000ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 618750ULL,
 	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	737500ULL, 737500ULL, 718750ULL, 693750ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL,
-	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	718750ULL, 718750ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 625000ULL, 606250ULL,
-	587500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	712500ULL, 712500ULL, 693750ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL, 600000ULL,
 	581250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	706250ULL, 700000ULL, 681250ULL, 662500ULL, 650000ULL, 631250ULL, 612500ULL, 593750ULL,
 	575000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	668750ULL, 668750ULL, 650000ULL, 637500ULL, 618750ULL, 600000ULL, 587500ULL, 568750ULL,
 	550000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	643750ULL, 643750ULL, 625000ULL, 612500ULL, 593750ULL, 581250ULL, 562500ULL, 543750ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	625000ULL, 625000ULL, 606250ULL, 593750ULL, 575000ULL, 562500ULL, 550000ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	612500ULL, 612500ULL, 600000ULL, 581250ULL, 568750ULL, 556250ULL, 543750ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	587500ULL, 587500ULL, 568750ULL, 556250ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	562500ULL, 562500ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v5_80[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1068750ULL, 1068750ULL, 1043750ULL, 1025000ULL, 1000000ULL, 981250ULL, 962500ULL, 937500ULL,
+	918750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	1000000ULL, 1000000ULL, 975000ULL, 956250ULL, 931250ULL, 912500ULL, 893750ULL, 868750ULL,
+	850000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	931250ULL, 931250ULL, 906250ULL, 887500ULL, 862500ULL, 843750ULL, 825000ULL, 800000ULL,
+	781250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	862500ULL, 862500ULL, 837500ULL, 818750ULL, 793750ULL, 775000ULL, 756250ULL, 731250ULL,
+	712500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	831250ULL, 831250ULL, 806250ULL, 787500ULL, 762500ULL, 743750ULL, 725000ULL, 700000ULL,
+	681250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	793750ULL, 793750ULL, 768750ULL, 750000ULL, 725000ULL, 706250ULL, 687500ULL, 662500ULL,
+	643750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	762500ULL, 762500ULL, 737500ULL, 718750ULL, 693750ULL, 675000ULL, 656250ULL, 631250ULL,
 	612500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	750000ULL, 743750ULL, 725000ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 618750ULL,
 	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	737500ULL, 737500ULL, 718750ULL, 693750ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL,
-	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	718750ULL, 718750ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 625000ULL, 606250ULL,
-	587500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	712500ULL, 712500ULL, 693750ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL, 600000ULL,
 	581250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	687500ULL, 681250ULL, 662500ULL, 643750ULL, 631250ULL, 612500ULL, 593750ULL, 575000ULL,
 	556250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	668750ULL, 668750ULL, 650000ULL, 637500ULL, 618750ULL, 600000ULL, 587500ULL, 568750ULL,
 	550000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	643750ULL, 643750ULL, 625000ULL, 612500ULL, 593750ULL, 581250ULL, 562500ULL, 543750ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	625000ULL, 625000ULL, 606250ULL, 593750ULL, 575000ULL, 562500ULL, 550000ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	612500ULL, 612500ULL, 600000ULL, 581250ULL, 568750ULL, 556250ULL, 543750ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	587500ULL, 587500ULL, 568750ULL, 556250ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	562500ULL, 562500ULL, 543750ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
 static const u64 exynos_soc_asv_dvfs_g3d_v32_81[] = {
+	/* OC estimates: 754->800 MHz adds 31.25 mV; round up to 6.25 mV. */
+	/* 1200 MHz */
+	1056250ULL, 1056250ULL, 1031250ULL, 1006250ULL, 987500ULL, 962500ULL, 943750ULL, 925000ULL,
+	906250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1100 MHz */
+	987500ULL, 987500ULL, 962500ULL, 937500ULL, 918750ULL, 893750ULL, 875000ULL, 856250ULL,
+	837500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 1000 MHz */
+	918750ULL, 918750ULL, 893750ULL, 868750ULL, 850000ULL, 825000ULL, 806250ULL, 787500ULL,
+	768750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 900 MHz */
+	850000ULL, 850000ULL, 825000ULL, 800000ULL, 781250ULL, 756250ULL, 737500ULL, 718750ULL,
+	700000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 850 MHz */
+	818750ULL, 818750ULL, 793750ULL, 768750ULL, 750000ULL, 725000ULL, 706250ULL, 687500ULL,
+	668750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 800 MHz */
+	781250ULL, 781250ULL, 756250ULL, 731250ULL, 712500ULL, 687500ULL, 668750ULL, 650000ULL,
+	631250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 754 MHz */
 	750000ULL, 750000ULL, 725000ULL, 700000ULL, 681250ULL, 656250ULL, 637500ULL, 618750ULL,
 	600000ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 676 MHz */
 	706250ULL, 706250ULL, 687500ULL, 668750ULL, 650000ULL, 625000ULL, 606250ULL, 587500ULL,
 	568750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	700000ULL, 700000ULL, 681250ULL, 662500ULL, 643750ULL, 625000ULL, 606250ULL, 587500ULL,
-	568750ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	681250ULL, 681250ULL, 662500ULL, 643750ULL, 625000ULL, 612500ULL, 593750ULL, 575000ULL,
-	556250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 572 MHz */
 	675000ULL, 675000ULL, 656250ULL, 637500ULL, 618750ULL, 606250ULL, 587500ULL, 568750ULL,
 	556250ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 433 MHz */
 	650000ULL, 643750ULL, 631250ULL, 612500ULL, 593750ULL, 581250ULL, 562500ULL, 543750ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 377 MHz */
 	637500ULL, 637500ULL, 618750ULL, 600000ULL, 587500ULL, 568750ULL, 556250ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	612500ULL, 612500ULL, 593750ULL, 581250ULL, 562500ULL, 550000ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 260 MHz */
 	600000ULL, 593750ULL, 581250ULL, 568750ULL, 556250ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	593750ULL, 587500ULL, 575000ULL, 562500ULL, 550000ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+	/* 156 MHz */
 	562500ULL, 562500ULL, 550000ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL,
-	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
-	537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL, 537500ULL,
 	537500ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
 };
 
@@ -2131,12 +2253,13 @@ static const u64 exynos_soc_gen_minmax_dvfs_mif_table_143[] = {
 };
 
 static const u64 exynos_soc_gen_minmax_dvfs_g3d_table_144[] = {
-	0ULL, 0ULL, 99ULL, 702ULL, 156ULL, 100ULL, 1ULL, 1ULL,
-	99ULL, 702ULL, 156ULL, 100ULL, 2ULL, 2ULL, 99ULL, 702ULL,
-	156ULL, 100ULL, 3ULL, 3ULL, 99ULL, 702ULL, 156ULL, 100ULL,
-	4ULL, 4ULL, 99ULL, 702ULL, 156ULL, 100ULL, 5ULL, 5ULL,
-	99ULL, 702ULL, 156ULL, 100ULL, 32ULL, 32ULL, 99ULL, 754ULL,
-	156ULL, 100ULL,
+	0ULL, 0ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
+	1ULL, 1ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
+	2ULL, 2ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
+	3ULL, 3ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
+	4ULL, 4ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
+	5ULL, 5ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
+	32ULL, 32ULL, 156ULL, 1200ULL, 156ULL, 156ULL,
 };
 
 static const u64 exynos_soc_gen_minmax_dvfs_int_table_145[] = {
@@ -3015,9 +3138,9 @@ static const struct exynos_soc_catalog_table exynos_soc_catalog[] = {
 	{ "DVFS", "dvfs_cpucl2", "levels", EXYNOS_SOC_DVFS_LEVELS, 1, 24, 0U, 0U, exynos_soc_dvfs_dvfs_cpucl2_levels_15 },
 	{ "DVFS", "dvfs_cpucl2", "sfr", EXYNOS_SOC_DVFS_SFR, 1, 2, 0U, 0U, exynos_soc_dvfs_dvfs_cpucl2_sfr_16 },
 	{ "DVFS", "dvfs_cpucl2", "params", EXYNOS_SOC_DVFS_PARAMS, 24, 2, 0U, 0U, exynos_soc_dvfs_dvfs_cpucl2_params_17 },
-	{ "DVFS", "dvfs_g3d", "levels", EXYNOS_SOC_DVFS_LEVELS, 1, 12, 0U, 0U, exynos_soc_dvfs_dvfs_g3d_levels_18 },
+	{ "DVFS", "dvfs_g3d", "levels", EXYNOS_SOC_DVFS_LEVELS, 1, 13, 0U, 0U, exynos_soc_dvfs_dvfs_g3d_levels_18 },
 	{ "DVFS", "dvfs_g3d", "sfr", EXYNOS_SOC_DVFS_SFR, 1, 1, 0U, 0U, exynos_soc_dvfs_dvfs_g3d_sfr_19 },
-	{ "DVFS", "dvfs_g3d", "params", EXYNOS_SOC_DVFS_PARAMS, 12, 1, 0U, 0U, exynos_soc_dvfs_dvfs_g3d_params_20 },
+	{ "DVFS", "dvfs_g3d", "params", EXYNOS_SOC_DVFS_PARAMS, 13, 1, 0U, 0U, exynos_soc_dvfs_dvfs_g3d_params_20 },
 	{ "DVFS", "dvfs_mif", "levels", EXYNOS_SOC_DVFS_LEVELS, 1, 10, 0U, 0U, exynos_soc_dvfs_dvfs_mif_levels_21 },
 	{ "DVFS", "dvfs_mif", "sfr", EXYNOS_SOC_DVFS_SFR, 1, 5, 0U, 0U, exynos_soc_dvfs_dvfs_mif_sfr_22 },
 	{ "DVFS", "dvfs_mif", "params", EXYNOS_SOC_DVFS_PARAMS, 10, 5, 0U, 0U, exynos_soc_dvfs_dvfs_mif_params_23 },
@@ -3071,14 +3194,14 @@ static const struct exynos_soc_catalog_table exynos_soc_catalog[] = {
 	{ "ASV", "dvfs_cpucl2", "v3", EXYNOS_SOC_ASV_TABLE, 24, 16, 3U, 0U, exynos_soc_asv_dvfs_cpucl2_v3_71 },
 	{ "ASV", "dvfs_cpucl2", "v4", EXYNOS_SOC_ASV_TABLE, 24, 16, 4U, 0U, exynos_soc_asv_dvfs_cpucl2_v4_72 },
 	{ "ASV", "dvfs_cpucl2", "v32", EXYNOS_SOC_ASV_TABLE, 24, 16, 32U, 0U, exynos_soc_asv_dvfs_cpucl2_v32_73 },
-	{ "ASV", "dvfs_g3d", "freq_mhz", EXYNOS_SOC_ASV_FREQS, 1, 12, 0U, 0U, exynos_soc_asv_dvfs_g3d_freq_mhz_74 },
-	{ "ASV", "dvfs_g3d", "v0", EXYNOS_SOC_ASV_TABLE, 12, 16, 0U, 0U, exynos_soc_asv_dvfs_g3d_v0_75 },
-	{ "ASV", "dvfs_g3d", "v1", EXYNOS_SOC_ASV_TABLE, 12, 16, 1U, 0U, exynos_soc_asv_dvfs_g3d_v1_76 },
-	{ "ASV", "dvfs_g3d", "v2", EXYNOS_SOC_ASV_TABLE, 12, 16, 2U, 0U, exynos_soc_asv_dvfs_g3d_v2_77 },
-	{ "ASV", "dvfs_g3d", "v3", EXYNOS_SOC_ASV_TABLE, 12, 16, 3U, 0U, exynos_soc_asv_dvfs_g3d_v3_78 },
-	{ "ASV", "dvfs_g3d", "v4", EXYNOS_SOC_ASV_TABLE, 12, 16, 4U, 0U, exynos_soc_asv_dvfs_g3d_v4_79 },
-	{ "ASV", "dvfs_g3d", "v5", EXYNOS_SOC_ASV_TABLE, 12, 16, 5U, 0U, exynos_soc_asv_dvfs_g3d_v5_80 },
-	{ "ASV", "dvfs_g3d", "v32", EXYNOS_SOC_ASV_TABLE, 12, 16, 32U, 0U, exynos_soc_asv_dvfs_g3d_v32_81 },
+	{ "ASV", "dvfs_g3d", "freq_mhz", EXYNOS_SOC_ASV_FREQS, 1, 13, 0U, 0U, exynos_soc_asv_dvfs_g3d_freq_mhz_74 },
+	{ "ASV", "dvfs_g3d", "v0", EXYNOS_SOC_ASV_TABLE, 13, 16, 0U, 0U, exynos_soc_asv_dvfs_g3d_v0_75 },
+	{ "ASV", "dvfs_g3d", "v1", EXYNOS_SOC_ASV_TABLE, 13, 16, 1U, 0U, exynos_soc_asv_dvfs_g3d_v1_76 },
+	{ "ASV", "dvfs_g3d", "v2", EXYNOS_SOC_ASV_TABLE, 13, 16, 2U, 0U, exynos_soc_asv_dvfs_g3d_v2_77 },
+	{ "ASV", "dvfs_g3d", "v3", EXYNOS_SOC_ASV_TABLE, 13, 16, 3U, 0U, exynos_soc_asv_dvfs_g3d_v3_78 },
+	{ "ASV", "dvfs_g3d", "v4", EXYNOS_SOC_ASV_TABLE, 13, 16, 4U, 0U, exynos_soc_asv_dvfs_g3d_v4_79 },
+	{ "ASV", "dvfs_g3d", "v5", EXYNOS_SOC_ASV_TABLE, 13, 16, 5U, 0U, exynos_soc_asv_dvfs_g3d_v5_80 },
+	{ "ASV", "dvfs_g3d", "v32", EXYNOS_SOC_ASV_TABLE, 13, 16, 32U, 0U, exynos_soc_asv_dvfs_g3d_v32_81 },
 	{ "ASV", "dvfs_mif", "freq_mhz", EXYNOS_SOC_ASV_FREQS, 1, 10, 0U, 0U, exynos_soc_asv_dvfs_mif_freq_mhz_82 },
 	{ "ASV", "dvfs_mif", "v0", EXYNOS_SOC_ASV_TABLE, 10, 16, 0U, 0U, exynos_soc_asv_dvfs_mif_v0_83 },
 	{ "ASV", "dvfs_mif", "v1", EXYNOS_SOC_ASV_TABLE, 10, 16, 1U, 0U, exynos_soc_asv_dvfs_mif_v1_84 },
@@ -3221,6 +3344,133 @@ static const struct exynos_soc_catalog_table exynos_soc_catalog[] = {
 	{ "THERMAL", "ISP", "ranges", EXYNOS_SOC_THERMAL_RANGES, 8, 5, 0U, 0U, exynos_soc_thermal_isp_ranges_221 },
 };
 
+/*
+ * Captured FVMap SRAM layout for the Exynos 9825 SM-N975F firmware.
+ * The relocated offsets compact existing alignment gaps. The final byte
+ * remains 0x9ef, so no bytes beyond the original FVMap payload are used.
+ * Frequency, voltage and PLL tables themselves remain in this C file.
+ */
+static const struct exynos_soc_fvmap_layout exynos_soc_fvmap_layout[] = {
+	{ 10,  5, 3, 0x0168, 0x0174, 0x01a8, 0x0168, 0x0172, 0x01a4, {0x01f8, 0x0228, 0x0260}, {0x01f4, 0x0224, 0x025c}, {10, 12, 2} },
+	{  5, 10, 0, 0x0270, 0x0284, 0x02b8, 0x026c, 0x0280, 0x02b4, {0}, {0}, {0} },
+	{ 19,  3, 1, 0x02e0, 0x02e8, 0x0324, 0x02dc, 0x02e2, 0x031c, {0x03bc}, {0x03b4}, {19} },
+	{ 19,  1, 1, 0x0410, 0x0414, 0x0428, 0x0408, 0x040a, 0x0420, {0x04c0}, {0x04b8}, {19} },
+	{ 24,  2, 1, 0x0514, 0x0518, 0x0548, 0x050c, 0x0510, 0x0540, {0x0608}, {0x0600}, {24} },
+	{  8,  6, 0, 0x0670, 0x067c, 0x06ac, 0x0668, 0x0674, 0x06a4, {0}, {0}, {0} },
+	{  5,  3, 0, 0x06ec, 0x06f4, 0x0704, 0x06e4, 0x06ea, 0x06fc, {0}, {0}, {0} },
+	{  6,  6, 0, 0x072c, 0x0738, 0x075c, 0x0724, 0x0730, 0x0754, {0}, {0}, {0} },
+	{  5,  3, 0, 0x078c, 0x0794, 0x07a4, 0x0784, 0x078a, 0x079c, {0}, {0}, {0} },
+	{  4,  1, 0, 0x07cc, 0x07cc, 0x07d0, 0x07c4, 0x07c4, 0x07c8, {0}, {0}, {0} },
+	{ 12,  1, 1, 0x07f0, 0x07f4, 0x0800, 0x07e8, 0x07ea, 0x07f8, {0x0860}, {0x0860}, {13} },
+	{  7,  6, 0, 0x089c, 0x08a8, 0x08d4, 0x089c, 0x08a8, 0x08d4, {0}, {0}, {0} },
+	{  5,  6, 0, 0x090c, 0x0918, 0x0938, 0x090c, 0x0918, 0x0938, {0}, {0}, {0} },
+	{  6,  2, 0, 0x0960, 0x0964, 0x0970, 0x0960, 0x0964, 0x0970, {0}, {0}, {0} },
+	{  6,  4, 0, 0x09a0, 0x09a8, 0x09c0, 0x09a0, 0x09a8, 0x09c0, {0}, {0}, {0} },
+};
+
+/* Exynos 9825 Mali governor/QoS policy, aligned to DVFS/dvfs_g3d levels. */
+static const struct exynos_soc_gpu_policy exynos_soc_g3d_policy[] = {
+	/* OC levels keep the highest existing Mali QoS and governor policy. */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 1200 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 1100 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 1000 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 900 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 850 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 800 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 754 MHz */
+	{ 78, 98, 5, 2093000, 1456000, 0, 2080000, 0 }, /* 676 MHz */
+	{ 78, 98, 5, 1794000, 0, 0, 0, 0 }, /* 572 MHz */
+	{ 78, 95, 1, 1352000, 0, 0, 0, 0 }, /* 433 MHz */
+	{ 78, 90, 1, 1352000, 0, 0, 0, 0 }, /* 377 MHz */
+	{ 78, 85, 1, 676000, 0, 0, 0, 0 }, /* 260 MHz */
+	{ 0, 85, 1, 676000, 0, 0, 0, 0 }, /* 156 MHz */
+};
+
+static bool exynos_soc_early_ready;
+static atomic_t exynos_soc_consumer_uses[EXYNOS_SOC_CONSUMER_COUNT];
+static atomic_t exynos_soc_table_lookups[ARRAY_SIZE(exynos_soc_catalog)];
+static atomic_t exynos_soc_opp_reads[ARRAY_SIZE(exynos_soc_catalog)];
+static atomic_t exynos_soc_fvmap_installs[ARRAY_SIZE(exynos_soc_catalog)];
+static const char * const exynos_soc_consumer_names[] = {
+	"vclk", "pll", "fvmap", "cpufreq", "devfreq", "gpu",
+	"tmu", "isp_cooling",
+};
+static bool exynos_soc_g3d_asv_seen;
+static unsigned int exynos_soc_g3d_asv_version;
+static unsigned int exynos_soc_g3d_asv_group;
+
+int __init exynos_soc_interface_early_init(void)
+{
+	unsigned int i;
+
+	if (READ_ONCE(exynos_soc_early_ready))
+		return 0;
+
+	for (i = 0; i < ARRAY_SIZE(exynos_soc_catalog); i++) {
+		const struct exynos_soc_catalog_table *entry = &exynos_soc_catalog[i];
+
+		if (!entry->block || !entry->name || !entry->subname ||
+		    !entry->data || !entry->rows || !entry->cols)
+			return -EINVAL;
+	}
+	if (ARRAY_SIZE(exynos_soc_g3d_policy) !=
+	    ARRAY_SIZE(exynos_soc_dvfs_dvfs_g3d_levels_18))
+		return -EINVAL;
+
+	WRITE_ONCE(exynos_soc_early_ready, true);
+	pr_info("exynos-soc_interface: %zu tables ready before CAL consumers\n",
+		ARRAY_SIZE(exynos_soc_catalog));
+	return 0;
+}
+early_initcall(exynos_soc_interface_early_init);
+
+void exynos_soc_note_consumer(enum exynos_soc_consumer consumer)
+{
+	if (consumer >= 0 && consumer < EXYNOS_SOC_CONSUMER_COUNT)
+		atomic_inc(&exynos_soc_consumer_uses[consumer]);
+}
+EXPORT_SYMBOL_GPL(exynos_soc_note_consumer);
+
+void exynos_soc_note_fvmap_domain(const char *name)
+{
+	unsigned int i;
+
+	if (!name)
+		return;
+	for (i = 0; i < ARRAY_SIZE(exynos_soc_catalog); i++) {
+		const struct exynos_soc_catalog_table *entry = &exynos_soc_catalog[i];
+
+		if (entry->kind == EXYNOS_SOC_DVFS_LEVELS &&
+		    !strcmp(entry->name, name)) {
+			atomic_inc(&exynos_soc_fvmap_installs[i]);
+			return;
+		}
+	}
+}
+EXPORT_SYMBOL_GPL(exynos_soc_note_fvmap_domain);
+
+const struct exynos_soc_fvmap_layout *exynos_soc_fvmap_layout_get(unsigned int domain)
+{
+	if (domain >= ARRAY_SIZE(exynos_soc_fvmap_layout))
+		return NULL;
+	return &exynos_soc_fvmap_layout[domain];
+}
+EXPORT_SYMBOL_GPL(exynos_soc_fvmap_layout_get);
+
+unsigned int exynos_soc_fvmap_layout_count(void)
+{
+	return ARRAY_SIZE(exynos_soc_fvmap_layout);
+}
+EXPORT_SYMBOL_GPL(exynos_soc_fvmap_layout_count);
+
+const struct exynos_soc_gpu_policy *exynos_soc_gpu_policy_get(unsigned int level)
+{
+	if (level >= ARRAY_SIZE(exynos_soc_g3d_policy))
+		return NULL;
+	return &exynos_soc_g3d_policy[level];
+}
+EXPORT_SYMBOL_GPL(exynos_soc_gpu_policy_get);
+
 unsigned int exynos_soc_catalog_count(void)
 {
 	return ARRAY_SIZE(exynos_soc_catalog);
@@ -3248,19 +3498,42 @@ const struct exynos_soc_catalog_table *exynos_soc_catalog_find(
 		const struct exynos_soc_catalog_table *entry = &exynos_soc_catalog[i];
 
 		if (entry->kind == kind && !strcmp(entry->block, block) &&
-		    !strcmp(entry->name, name) && !strcmp(entry->subname, subname))
+		    !strcmp(entry->name, name) && !strcmp(entry->subname, subname)) {
+			atomic_inc(&exynos_soc_table_lookups[i]);
 			return entry;
+		}
 	}
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(exynos_soc_catalog_find);
 
+static const struct exynos_soc_catalog_table *
+exynos_soc_find_asv_table(const char *name, unsigned int version)
+{
+	const struct exynos_soc_catalog_table *best = NULL;
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(exynos_soc_catalog); i++) {
+		const struct exynos_soc_catalog_table *entry = &exynos_soc_catalog[i];
+
+		if (entry->kind != EXYNOS_SOC_ASV_TABLE ||
+		    strcmp(entry->name, name))
+			continue;
+		if (entry->aux0 == version)
+			return entry;
+		if (entry->aux0 <= version &&
+		    (!best || entry->aux0 > best->aux0))
+			best = entry;
+	}
+
+	return best;
+}
+
 int exynos_soc_get_opp(const char *name, unsigned int asv_version,
 		      unsigned int asv_group, unsigned int level,
 		      unsigned int *freq_khz, unsigned int *volt_uv)
 {
-	const struct exynos_soc_catalog_table *dvfs, *asv_freq, *asv = NULL;
-	unsigned int i;
+	const struct exynos_soc_catalog_table *dvfs, *asv_freq, *asv;
 	u64 rate, uv;
 
 	if (!name || !freq_khz || !volt_uv)
@@ -3272,15 +3545,7 @@ int exynos_soc_get_opp(const char *name, unsigned int asv_version,
 	if (!dvfs || !asv_freq)
 		return -ENOENT;
 
-	for (i = 0; i < ARRAY_SIZE(exynos_soc_catalog); i++) {
-		const struct exynos_soc_catalog_table *entry = &exynos_soc_catalog[i];
-
-		if (entry->kind == EXYNOS_SOC_ASV_TABLE &&
-		    entry->aux0 == asv_version && !strcmp(entry->name, name)) {
-			asv = entry;
-			break;
-		}
-	}
+	asv = exynos_soc_find_asv_table(name, asv_version);
 	if (!asv)
 		return -ENOENT;
 	if (level >= dvfs->cols || level >= asv_freq->cols ||
@@ -3289,11 +3554,174 @@ int exynos_soc_get_opp(const char *name, unsigned int asv_version,
 
 	rate = dvfs->data[level];
 	uv = asv->data[level * asv->cols + asv_group];
-	if (!rate || !uv || rate != asv_freq->data[level] * 1000ULL ||
+	/* DVS_CP has no programmable ASV voltage in the supplied dump. */
+	if (!rate || (!uv && strcmp(name, "dvs_cp")) ||
+	    rate != asv_freq->data[level] * 1000ULL ||
 	    rate > U32_MAX || uv > U32_MAX)
 		return -ERANGE;
 	*freq_khz = (unsigned int)rate;
 	*volt_uv = (unsigned int)uv;
+	atomic_inc(&exynos_soc_opp_reads[dvfs - exynos_soc_catalog]);
+	if (!strcmp(name, "dvfs_g3d")) {
+		WRITE_ONCE(exynos_soc_g3d_asv_version, asv->aux0);
+		WRITE_ONCE(exynos_soc_g3d_asv_group, asv_group);
+		WRITE_ONCE(exynos_soc_g3d_asv_seen, true);
+	}
 	return 0;
 }
 EXPORT_SYMBOL_GPL(exynos_soc_get_opp);
+
+int exynos_soc_get_limits(const char *name, unsigned int asv_version,
+			 unsigned int *min_khz, unsigned int *max_khz,
+			 unsigned int *boot_khz, unsigned int *resume_khz)
+{
+	const struct exynos_soc_catalog_table *table;
+	const u64 *row = NULL;
+	char key[40];
+	unsigned int i;
+
+	if (!name || !min_khz || !max_khz || !boot_khz || !resume_khz)
+		return -EINVAL;
+	if (snprintf(key, sizeof(key), "MINMAX_%s", name) >= sizeof(key))
+		return -ENAMETOOLONG;
+	table = exynos_soc_catalog_find("GEN", key, "table",
+					EXYNOS_SOC_GEN_TABLE);
+	if (!table || table->cols < 6)
+		return -ENOENT;
+
+	for (i = 0; i < table->rows; i++) {
+		const u64 *candidate = &table->data[i * table->cols];
+
+		if (candidate[0] == asv_version) {
+			row = candidate;
+			break;
+		}
+		if (candidate[0] <= asv_version &&
+		    (!row || candidate[0] > row[0]))
+			row = candidate;
+	}
+	if (!row)
+		return -ENOENT;
+	if (row[2] > U32_MAX / 1000 || row[3] > U32_MAX / 1000 ||
+	    row[4] > U32_MAX / 1000 || row[5] > U32_MAX / 1000)
+		return -ERANGE;
+	*min_khz = row[2] * 1000;
+	*max_khz = row[3] * 1000;
+	*boot_khz = row[4] * 1000;
+	*resume_khz = row[5] * 1000;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(exynos_soc_get_limits);
+
+static ssize_t status_show(struct kobject *kobj,
+			   struct kobj_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE,
+			"early_ready=%u\ncatalog_tables=%zu\ng3d_levels=%zu\n",
+			READ_ONCE(exynos_soc_early_ready),
+			ARRAY_SIZE(exynos_soc_catalog),
+			ARRAY_SIZE(exynos_soc_g3d_policy));
+}
+
+static ssize_t consumers_show(struct kobject *kobj,
+			      struct kobj_attribute *attr, char *buf)
+{
+	ssize_t len = 0;
+	unsigned int i;
+
+	for (i = 0; i < EXYNOS_SOC_CONSUMER_COUNT; i++)
+		len += scnprintf(buf + len, PAGE_SIZE - len, "%s=%d\n",
+				 exynos_soc_consumer_names[i],
+				 atomic_read(&exynos_soc_consumer_uses[i]));
+	return len;
+}
+
+static ssize_t domains_show(struct kobject *kobj,
+			    struct kobj_attribute *attr, char *buf)
+{
+	ssize_t len = scnprintf(buf, PAGE_SIZE,
+			"domain levels lookups opp_reads fvmap_installs\n");
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(exynos_soc_catalog); i++) {
+		const struct exynos_soc_catalog_table *entry = &exynos_soc_catalog[i];
+
+		if (entry->kind != EXYNOS_SOC_DVFS_LEVELS)
+			continue;
+		len += scnprintf(buf + len, PAGE_SIZE - len,
+				 "%s %u %d %d %d\n", entry->name,
+				 entry->cols,
+				 atomic_read(&exynos_soc_table_lookups[i]),
+				 atomic_read(&exynos_soc_opp_reads[i]),
+				 atomic_read(&exynos_soc_fvmap_installs[i]));
+	}
+	return len;
+}
+
+static ssize_t g3d_table_show(struct kobject *kobj,
+			      struct kobj_attribute *attr, char *buf)
+{
+	const struct exynos_soc_catalog_table *asv = NULL;
+	unsigned int version = READ_ONCE(exynos_soc_g3d_asv_version);
+	unsigned int group = READ_ONCE(exynos_soc_g3d_asv_group);
+	ssize_t len;
+	unsigned int i;
+
+	if (READ_ONCE(exynos_soc_g3d_asv_seen))
+		asv = exynos_soc_find_asv_table("dvfs_g3d", version);
+	if (asv)
+		len = scnprintf(buf, PAGE_SIZE,
+				"source=exynos-soc_interface asv_version=%u group=%u\n",
+				version, group);
+	else
+		len = scnprintf(buf, PAGE_SIZE,
+				"source=exynos-soc_interface asv=unavailable\n");
+	len += scnprintf(buf + len, PAGE_SIZE - len,
+			 "level freq_khz volt_uv min_load max_load stay mem_khz little_khz middle_khz big_max_khz\n");
+	for (i = 0; i < ARRAY_SIZE(exynos_soc_g3d_policy); i++) {
+		const struct exynos_soc_gpu_policy *p = &exynos_soc_g3d_policy[i];
+		u64 uv = asv && i < asv->rows && group < asv->cols ?
+			asv->data[i * asv->cols + group] : 0;
+
+		len += scnprintf(buf + len, PAGE_SIZE - len,
+				 "%u %llu %llu %u %u %u %u %u %u %u\n",
+				 i, exynos_soc_dvfs_dvfs_g3d_levels_18[i], uv,
+				 p->min_threshold, p->max_threshold,
+				 p->down_staycount, p->mem_freq,
+				 p->cpu_little_min_freq, p->cpu_middle_min_freq,
+				 p->cpu_big_max_freq ?: INT_MAX);
+	}
+	return len;
+}
+
+static struct kobj_attribute status_attr = __ATTR_RO(status);
+static struct kobj_attribute consumers_attr = __ATTR_RO(consumers);
+static struct kobj_attribute domains_attr = __ATTR_RO(domains);
+static struct kobj_attribute g3d_table_attr = __ATTR_RO(g3d_table);
+
+static struct attribute *exynos_soc_debug_attrs[] = {
+	&status_attr.attr,
+	&consumers_attr.attr,
+	&domains_attr.attr,
+	&g3d_table_attr.attr,
+	NULL,
+};
+
+static const struct attribute_group exynos_soc_debug_group = {
+	.attrs = exynos_soc_debug_attrs,
+};
+
+static int __init exynos_soc_sysfs_init(void)
+{
+	struct kobject *kobj;
+	int ret;
+
+	kobj = kobject_create_and_add("exynos-soc_interface", kernel_kobj);
+	if (!kobj)
+		return -ENOMEM;
+	ret = sysfs_create_group(kobj, &exynos_soc_debug_group);
+	if (ret)
+		kobject_put(kobj);
+	return ret;
+}
+subsys_initcall(exynos_soc_sysfs_init);
