@@ -47,6 +47,15 @@ static int of_thermal_get_temp(struct thermal_zone_device *tz,
 	return data->ops->get_temp(data->sensor_data, temp);
 }
 
+static bool of_thermal_get_throttle_bypass(struct thermal_zone_device *tz)
+{
+	struct __thermal_zone *data = tz->devdata;
+	const struct thermal_zone_of_device_ops *ops = READ_ONCE(data->ops);
+
+	return ops && ops->get_throttle_bypass &&
+		ops->get_throttle_bypass(data->sensor_data);
+}
+
 static int of_thermal_set_trips(struct thermal_zone_device *tz,
 				int low, int high)
 {
@@ -369,6 +378,7 @@ static int of_thermal_get_crit_temp(struct thermal_zone_device *tz,
 }
 
 static struct thermal_zone_device_ops of_thermal_ops = {
+	.get_throttle_bypass = of_thermal_get_throttle_bypass,
 	.get_mode = of_thermal_get_mode,
 	.set_mode = of_thermal_set_mode,
 

@@ -184,6 +184,10 @@ void thermal_cdev_update(struct thermal_cooling_device *cdev)
 			instance->tz->id, instance->target);
 		if (instance->target == THERMAL_NO_TARGET)
 			continue;
+		/* Preserve requests from other zones sharing this device. */
+		if (instance->tz->ops->get_throttle_bypass &&
+		    instance->tz->ops->get_throttle_bypass(instance->tz))
+			continue;
 		if (instance->target > target)
 			target = instance->target;
 	}
@@ -194,6 +198,28 @@ void thermal_cdev_update(struct thermal_cooling_device *cdev)
 	dev_dbg(&cdev->device, "set to state %lu\n", target);
 }
 EXPORT_SYMBOL(thermal_cdev_update);
+
+/**
+ * thermal_zone_update_cooling - apply changes to a zone's cooling policy
+ * @tz: thermal zone whose cooling requests have changed
+ *
+ * Reaggregate stored targets, including requests from other bound zones.
+ * Call without holding the zone or cooling device locks.
+ */
+void thermal_zone_update_cooling(struct thermal_zone_device *tz)
+{
+	struct thermal_instance *instance;
+
+	mutex_lock(&tz->lock);
+	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
+		mutex_lock(&instance->cdev->lock);
+		instance->cdev->updated = false;
+		mutex_unlock(&instance->cdev->lock);
+		thermal_cdev_update(instance->cdev);
+	}
+	mutex_unlock(&tz->lock);
+}
+EXPORT_SYMBOL_GPL(thermal_zone_update_cooling);
 
 /**
  * thermal_zone_get_slope - return the slope attribute of the thermal zone

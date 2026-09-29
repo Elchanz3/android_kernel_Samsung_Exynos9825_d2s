@@ -132,6 +132,8 @@ struct thermal_zone_device_ops {
 	int (*notify) (struct thermal_zone_device *, int,
 		       enum thermal_trip_type);
 	int (*throttle_hotplug) (struct thermal_zone_device *);
+	/* Non-blocking policy queried with the cooling device locked. */
+	bool (*get_throttle_bypass)(struct thermal_zone_device *);
 };
 
 struct thermal_cooling_device_ops {
@@ -373,6 +375,8 @@ struct thermal_genl_event {
  *		   temperature.
  * @set_trip_temp: a pointer to a function that sets the trip temperature on
  *		   hardware.
+ * @get_throttle_bypass: optional non-blocking callback that suppresses this
+ *		 zone's cooling requests without changing sensor readings.
  */
 struct thermal_zone_of_device_ops {
 	int (*get_temp)(void *, int *);
@@ -381,6 +385,7 @@ struct thermal_zone_of_device_ops {
 	int (*set_emul_temp)(void *, int);
 	int (*set_trip_temp)(void *, int, int);
 	int (*throttle_cpu_hotplug)(void *, int temp);
+	bool (*get_throttle_bypass)(void *);
 };
 
 /**
@@ -539,6 +544,7 @@ int get_tz_trend(struct thermal_zone_device *, int);
 struct thermal_instance *get_thermal_instance(struct thermal_zone_device *,
 		struct thermal_cooling_device *, int);
 void thermal_cdev_update(struct thermal_cooling_device *);
+void thermal_zone_update_cooling(struct thermal_zone_device *tz);
 void thermal_notify_framework(struct thermal_zone_device *, int);
 #else
 static inline bool cdev_is_power_actor(struct thermal_cooling_device *cdev)
@@ -610,6 +616,8 @@ get_thermal_instance(struct thermal_zone_device *tz,
 	struct thermal_cooling_device *cdev, int trip)
 { return ERR_PTR(-ENODEV); }
 static inline void thermal_cdev_update(struct thermal_cooling_device *cdev)
+{ }
+static inline void thermal_zone_update_cooling(struct thermal_zone_device *tz)
 { }
 static inline void thermal_notify_framework(struct thermal_zone_device *tz,
 	int trip)

@@ -44,6 +44,8 @@
 #include <linux/debugfs.h>
 #include <linux/debug-snapshot.h>
 #include <linux/cpuhotplug.h>
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
 #include <soc/samsung/tmu.h>
 #include <soc/samsung/ect_parser.h>
 #ifdef CONFIG_SOC_EXYNOS9820
@@ -290,9 +292,18 @@ static bool suspended;
 static DEFINE_MUTEX (thermal_suspend_lock);
 #endif
 static bool is_cpu_hotplugged_out;
+static DEFINE_MUTEX(exynos_tmu_hotplug_lock);
 
 /* list of multiple instance for each thermal sensor */
 static LIST_HEAD(dtm_dev_list);
+static DEFINE_MUTEX(exynos_tmu_bypass_lock);
+static bool exynos_tmu_bypass;
+static struct kobject *exynos_tmu_kobj;
+
+static bool exynos_tmu_get_throttle_bypass(void *data)
+{
+	return READ_ONCE(exynos_tmu_bypass);
+}
 
 static u32 t_bgri_trim;
 static u32 t_vref_trim;
@@ -1129,6 +1140,17 @@ static int exynos_throttle_cpu_hotplug(void *p, int temp)
 	int ret = 0;
 	struct cpumask mask;
 
+	mutex_lock(&exynos_tmu_hotplug_lock);
+	if (READ_ONCE(exynos_tmu_bypass)) {
+		if (is_cpu_hotplugged_out) {
+			ret = exynos_cpuhp_request("DTM",
+						 *cpu_possible_mask, 0);
+			if (!ret)
+				is_cpu_hotplugged_out = false;
+		}
+		goto out;
+	}
+
 	temp = temp / MCELSIUS;
 
 	if (is_cpu_hotplugged_out) {
@@ -1152,19 +1174,80 @@ static int exynos_throttle_cpu_hotplug(void *p, int temp)
 		}
 	}
 
+out:
+	mutex_unlock(&exynos_tmu_hotplug_lock);
 	return ret;
 }
 
 static const struct thermal_zone_of_device_ops exynos_hotplug_sensor_ops = {
+	.get_throttle_bypass = exynos_tmu_get_throttle_bypass,
 	.get_temp = exynos_get_temp,
 	.set_emul_temp = exynos_tmu_set_emulation,
 	.throttle_cpu_hotplug = exynos_throttle_cpu_hotplug,
 };
 
 static const struct thermal_zone_of_device_ops exynos_sensor_ops = {
+	.get_throttle_bypass = exynos_tmu_get_throttle_bypass,
 	.get_temp = exynos_get_temp,
 	.set_emul_temp = exynos_tmu_set_emulation,
 	.get_trend = exynos_get_trend,
+};
+
+static ssize_t bypass_show(struct kobject *kobj, struct kobj_attribute *attr,
+			   char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", READ_ONCE(exynos_tmu_bypass));
+}
+
+static void exynos_tmu_set_bypass(bool bypass)
+{
+	struct exynos_tmu_data *data;
+	int ret;
+
+	mutex_lock(&exynos_tmu_bypass_lock);
+	WRITE_ONCE(exynos_tmu_bypass, bypass);
+	list_for_each_entry(data, &dtm_dev_list, node) {
+		thermal_zone_device_update(data->tzd,
+					   THERMAL_EVENT_UNSPECIFIED);
+		thermal_zone_update_cooling(data->tzd);
+		if (bypass && data->hotplug_enable) {
+			ret = exynos_throttle_cpu_hotplug(data,
+						data->tzd->temperature);
+			if (ret)
+				pr_warn("exynos-tmu: failed to release DTM hotplug: %d\n",
+					ret);
+		}
+	}
+	mutex_unlock(&exynos_tmu_bypass_lock);
+}
+
+static ssize_t bypass_store(struct kobject *kobj, struct kobj_attribute *attr,
+			    const char *buf, size_t count)
+{
+	bool bypass;
+	int ret;
+
+	ret = kstrtobool(buf, &bypass);
+	if (ret)
+		return ret;
+
+	exynos_tmu_set_bypass(bypass);
+
+	pr_info("exynos-tmu: thermal step bypass %s\n",
+		bypass ? "enabled" : "disabled");
+	return count;
+}
+
+static struct kobj_attribute bypass_attr =
+	__ATTR(bypass, 0644, bypass_show, bypass_store);
+
+static struct attribute *exynos_tmu_kernel_attrs[] = {
+	&bypass_attr.attr,
+	NULL,
+};
+
+static const struct attribute_group exynos_tmu_kernel_attr_group = {
+	.attrs = exynos_tmu_kernel_attrs,
 };
 
 static ssize_t
@@ -1659,10 +1742,10 @@ static int exynos_tmu_probe(struct platform_device *pdev)
 	if (ret)
 		dev_err(&pdev->dev, "cannot create exynos tmu attr group");
 
-	mutex_lock(&data->lock);
+	mutex_lock(&exynos_tmu_bypass_lock);
 	list_add_tail(&data->node, &dtm_dev_list);
 	num_of_devices++;
-	mutex_unlock(&data->lock);
+	mutex_unlock(&exynos_tmu_bypass_lock);
 
 	if (list_is_singular(&dtm_dev_list)) {
 #ifdef CONFIG_EXYNOS_ACPM_THERMAL
@@ -1694,7 +1777,8 @@ static int exynos_tmu_remove(struct platform_device *pdev)
 {
 	struct exynos_tmu_data *data = platform_get_drvdata(pdev);
 	struct thermal_zone_device *tzd = data->tzd;
-	struct exynos_tmu_data *devnode;
+
+	mutex_lock(&exynos_tmu_bypass_lock);
 
 #ifndef CONFIG_EXYNOS_ACPM_THERMAL
 	if (list_is_singular(&dtm_dev_list))
@@ -1704,15 +1788,9 @@ static int exynos_tmu_remove(struct platform_device *pdev)
 	thermal_zone_of_sensor_unregister(&pdev->dev, tzd);
 	exynos_tmu_control(pdev, false);
 
-	mutex_lock(&data->lock);
-	list_for_each_entry(devnode, &dtm_dev_list, node) {
-		if (devnode->id == data->id) {
-			list_del(&devnode->node);
-			num_of_devices--;
-			break;
-		}
-	}
-	mutex_unlock(&data->lock);
+	list_del(&data->node);
+	num_of_devices--;
+	mutex_unlock(&exynos_tmu_bypass_lock);
 
 	return 0;
 }
@@ -1800,7 +1878,42 @@ static struct platform_driver exynos_tmu_driver = {
 	.remove	= exynos_tmu_remove,
 };
 
-module_platform_driver(exynos_tmu_driver);
+static int __init exynos_tmu_init(void)
+{
+	int ret;
+
+	ret = platform_driver_register(&exynos_tmu_driver);
+	if (ret)
+		return ret;
+
+	exynos_tmu_kobj = kobject_create_and_add("exynos-tmu", kernel_kobj);
+	if (!exynos_tmu_kobj) {
+		ret = -ENOMEM;
+		goto err_driver;
+	}
+
+	ret = sysfs_create_group(exynos_tmu_kobj,
+				 &exynos_tmu_kernel_attr_group);
+	if (ret) {
+		kobject_put(exynos_tmu_kobj);
+		goto err_driver;
+	}
+	return 0;
+
+err_driver:
+	platform_driver_unregister(&exynos_tmu_driver);
+	return ret;
+}
+module_init(exynos_tmu_init);
+
+static void __exit exynos_tmu_exit(void)
+{
+	sysfs_remove_group(exynos_tmu_kobj, &exynos_tmu_kernel_attr_group);
+	kobject_put(exynos_tmu_kobj);
+	exynos_tmu_set_bypass(false);
+	platform_driver_unregister(&exynos_tmu_driver);
+}
+module_exit(exynos_tmu_exit);
 
 #ifdef CONFIG_EXYNOS_ACPM_THERMAL
 static void exynos_acpm_tmu_test_cp_call(bool mode)
