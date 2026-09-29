@@ -75,6 +75,9 @@ int exynos_soc_interface_early_init(void);
 void exynos_soc_note_consumer(enum exynos_soc_consumer consumer);
 void exynos_soc_note_fvmap_domain(const char *name);
 const struct exynos_soc_gpu_policy *exynos_soc_gpu_policy_get(unsigned int level);
+/* Runtime GPU tables start at this zero-based catalog index. */
+unsigned int exynos_soc_gpu_first_index(void);
+unsigned int exynos_soc_gpu_level_count(void);
 const struct exynos_soc_fvmap_layout *exynos_soc_fvmap_layout_get(unsigned int domain);
 unsigned int exynos_soc_fvmap_layout_count(void);
 

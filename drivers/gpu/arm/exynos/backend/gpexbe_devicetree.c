@@ -111,26 +111,29 @@ static int build_clk_table(void)
 {
 	const struct exynos_soc_catalog_table *levels;
 	const struct exynos_soc_gpu_policy *policy;
+	unsigned int first = exynos_soc_gpu_first_index();
+	unsigned int count = exynos_soc_gpu_level_count();
 	int row;
 
 	levels = exynos_soc_catalog_find("DVFS", "dvfs_g3d", "levels",
 					 EXYNOS_SOC_DVFS_LEVELS);
-	if (!levels || levels->rows != 1 || !levels->cols)
+	if (!levels || levels->rows != 1 || !count || first >= levels->cols ||
+	    count != levels->cols - first)
 		return -EINVAL;
 
-	clock_table = kcalloc(levels->cols, sizeof(*clock_table), GFP_KERNEL);
+	clock_table = kcalloc(count, sizeof(*clock_table), GFP_KERNEL);
 	if (!clock_table)
 		return -ENOMEM;
 
-	for (row = 0; row < levels->cols; row++) {
-		policy = exynos_soc_gpu_policy_get(row);
-		if (!policy || levels->data[row] > INT_MAX) {
+	for (row = 0; row < count; row++) {
+		policy = exynos_soc_gpu_policy_get(first + row);
+		if (!policy || levels->data[first + row] > INT_MAX) {
 			kfree(clock_table);
 			clock_table = NULL;
 			return -EINVAL;
 		}
 
-		clock_table[row].clock = levels->data[row];
+		clock_table[row].clock = levels->data[first + row];
 		clock_table[row].min_threshold = policy->min_threshold;
 		clock_table[row].max_threshold = policy->max_threshold;
 		clock_table[row].down_staycount = policy->down_staycount;
@@ -167,7 +170,7 @@ static int build_clk_table(void)
 #endif
 	}
 
-	dt_info.gpu_dvfs_table_size.row = levels->cols;
+	dt_info.gpu_dvfs_table_size.row = count;
 	dt_info.gpu_dvfs_table_size.col = 8;
 
 	return 0;

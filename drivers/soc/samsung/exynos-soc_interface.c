@@ -188,6 +188,11 @@ static const u64 exynos_soc_dvfs_dvfs_cpucl2_params_17[] = {
 	20ULL, 0ULL, 21ULL, 0ULL, 22ULL, 0ULL, 23ULL, 0ULL,
 };
 
+/*
+ * set maximum GPU level by default
+ */
+#define EXYNOS_SOC_GPU_MAX_LEVEL 7
+
 static const u64 exynos_soc_dvfs_dvfs_g3d_levels_18[] = {
 	1200000ULL, 1100000ULL, 1000000ULL, 900000ULL, 850000ULL,
 	800000ULL, 754000ULL, 676000ULL, 572000ULL, 433000ULL,
@@ -3403,6 +3408,10 @@ int __init exynos_soc_interface_early_init(void)
 {
 	unsigned int i;
 
+	BUILD_BUG_ON(EXYNOS_SOC_GPU_MAX_LEVEL < 1);
+	BUILD_BUG_ON(EXYNOS_SOC_GPU_MAX_LEVEL >
+		     ARRAY_SIZE(exynos_soc_dvfs_dvfs_g3d_levels_18));
+
 	if (READ_ONCE(exynos_soc_early_ready))
 		return 0;
 
@@ -3462,6 +3471,19 @@ unsigned int exynos_soc_fvmap_layout_count(void)
 	return ARRAY_SIZE(exynos_soc_fvmap_layout);
 }
 EXPORT_SYMBOL_GPL(exynos_soc_fvmap_layout_count);
+
+unsigned int exynos_soc_gpu_first_index(void)
+{
+	return EXYNOS_SOC_GPU_MAX_LEVEL - 1;
+}
+EXPORT_SYMBOL_GPL(exynos_soc_gpu_first_index);
+
+unsigned int exynos_soc_gpu_level_count(void)
+{
+	return ARRAY_SIZE(exynos_soc_dvfs_dvfs_g3d_levels_18) -
+		exynos_soc_gpu_first_index();
+}
+EXPORT_SYMBOL_GPL(exynos_soc_gpu_level_count);
 
 const struct exynos_soc_gpu_policy *exynos_soc_gpu_policy_get(unsigned int level)
 {
@@ -3609,6 +3631,13 @@ int exynos_soc_get_limits(const char *name, unsigned int asv_version,
 	*max_khz = row[3] * 1000;
 	*boot_khz = row[4] * 1000;
 	*resume_khz = row[5] * 1000;
+	if (!strcmp(name, "dvfs_g3d")) {
+		*max_khz = min_t(unsigned int, *max_khz,
+				exynos_soc_dvfs_dvfs_g3d_levels_18[
+					exynos_soc_gpu_first_index()]);
+		*boot_khz = min(*boot_khz, *max_khz);
+		*resume_khz = min(*resume_khz, *max_khz);
+	}
 	return 0;
 }
 EXPORT_SYMBOL_GPL(exynos_soc_get_limits);
@@ -3617,10 +3646,20 @@ static ssize_t status_show(struct kobject *kobj,
 			   struct kobj_attribute *attr, char *buf)
 {
 	return scnprintf(buf, PAGE_SIZE,
-			"early_ready=%u\ncatalog_tables=%zu\ng3d_levels=%zu\n",
+			"early_ready=%u\ncatalog_tables=%zu\ng3d_levels=%zu\n"
+			"gpu_max_level=%u\ng3d_runtime_levels=%u\ngpu_max_freq_khz=%llu\n",
 			READ_ONCE(exynos_soc_early_ready),
 			ARRAY_SIZE(exynos_soc_catalog),
-			ARRAY_SIZE(exynos_soc_g3d_policy));
+			ARRAY_SIZE(exynos_soc_g3d_policy),
+			EXYNOS_SOC_GPU_MAX_LEVEL, exynos_soc_gpu_level_count(),
+			exynos_soc_dvfs_dvfs_g3d_levels_18[
+				exynos_soc_gpu_first_index()]);
+}
+
+static ssize_t gpu_max_level_show(struct kobject *kobj,
+				struct kobj_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", EXYNOS_SOC_GPU_MAX_LEVEL);
 }
 
 static ssize_t consumers_show(struct kobject *kobj,
@@ -3677,15 +3716,16 @@ static ssize_t g3d_table_show(struct kobject *kobj,
 		len = scnprintf(buf, PAGE_SIZE,
 				"source=exynos-soc_interface asv=unavailable\n");
 	len += scnprintf(buf + len, PAGE_SIZE - len,
-			 "level freq_khz volt_uv min_load max_load stay mem_khz little_khz middle_khz big_max_khz\n");
+			 "level active freq_khz volt_uv min_load max_load stay mem_khz little_khz middle_khz big_max_khz\n");
 	for (i = 0; i < ARRAY_SIZE(exynos_soc_g3d_policy); i++) {
 		const struct exynos_soc_gpu_policy *p = &exynos_soc_g3d_policy[i];
 		u64 uv = asv && i < asv->rows && group < asv->cols ?
 			asv->data[i * asv->cols + group] : 0;
 
 		len += scnprintf(buf + len, PAGE_SIZE - len,
-				 "%u %llu %llu %u %u %u %u %u %u %u\n",
-				 i, exynos_soc_dvfs_dvfs_g3d_levels_18[i], uv,
+				 "%u %u %llu %llu %u %u %u %u %u %u %u\n",
+				 i + 1, i >= exynos_soc_gpu_first_index(),
+				 exynos_soc_dvfs_dvfs_g3d_levels_18[i], uv,
 				 p->min_threshold, p->max_threshold,
 				 p->down_staycount, p->mem_freq,
 				 p->cpu_little_min_freq, p->cpu_middle_min_freq,
@@ -3698,12 +3738,14 @@ static struct kobj_attribute status_attr = __ATTR_RO(status);
 static struct kobj_attribute consumers_attr = __ATTR_RO(consumers);
 static struct kobj_attribute domains_attr = __ATTR_RO(domains);
 static struct kobj_attribute g3d_table_attr = __ATTR_RO(g3d_table);
+static struct kobj_attribute gpu_max_level_attr = __ATTR_RO(gpu_max_level);
 
 static struct attribute *exynos_soc_debug_attrs[] = {
 	&status_attr.attr,
 	&consumers_attr.attr,
 	&domains_attr.attr,
 	&g3d_table_attr.attr,
+	&gpu_max_level_attr.attr,
 	NULL,
 };
 

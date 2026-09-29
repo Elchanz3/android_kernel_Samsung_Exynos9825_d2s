@@ -37,11 +37,7 @@ static unsigned int cal_id;
 
 int gpexbe_clock_get_level_num(void)
 {
-	const struct exynos_soc_catalog_table *levels;
-
-	levels = exynos_soc_catalog_find("DVFS", "dvfs_g3d", "levels",
-					 EXYNOS_SOC_DVFS_LEVELS);
-	return levels ? levels->cols : 0;
+	return exynos_soc_gpu_level_count();
 }
 
 int gpexbe_clock_get_rate_asv_table(struct freq_volt *fv_array, int level_num)
@@ -56,7 +52,8 @@ int gpexbe_clock_get_rate_asv_table(struct freq_volt *fv_array, int level_num)
 		return -EINVAL;
 	for (i = 0; i < level_num; i++) {
 		ret = exynos_soc_get_opp("dvfs_g3d", cal_asv_get_tablever(),
-					 group, i, &freq, &volt);
+					 group, exynos_soc_gpu_first_index() + i,
+					 &freq, &volt);
 		if (ret)
 			return ret;
 		fv_array[i].freq = freq;

@@ -61,6 +61,11 @@ int cal_dfs_set_rate(unsigned int id, unsigned long rate)
 	int ret;
 
 	if (IS_ACPM_VCLK(id)) {
+		vclk = cmucal_get_node(id);
+		if (vclk && vclk->name && !strcmp(vclk->name, "dvfs_g3d") &&
+		    (rate < vclk->min_freq || rate > vclk->max_freq))
+			return -ERANGE;
+
 		if (!fvmap_is_interface_ready(id))
 			return -EINVAL;
 		if (cal_check_hiu_dvfs_id && cal_check_hiu_dvfs_id(id))
