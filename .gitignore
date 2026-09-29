@@ -148,3 +148,4 @@ zImage
 *.zip
 dtb
 KernelSU
+compilation.log
