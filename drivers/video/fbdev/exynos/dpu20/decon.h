@@ -1022,6 +1022,12 @@ struct decon_update_regs {
 struct decon_vsync {
 	wait_queue_head_t wait;
 	ktime_t timestamp;
+	/* External TE measurements, protected by decon->slock. */
+	u64 te_last_ns;
+	u64 te_sum_ns;
+	u64 te_period_ns;
+	u32 te_count;
+	u32 te_samples;
 	bool active;
 	int irq_refcount;
 	struct mutex lock;

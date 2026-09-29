@@ -53,6 +53,15 @@
 
 int dsim_log_level = 6;
 
+#ifdef CONFIG_EXYNOS_COMMON_PANEL
+/* Experimental host timing; the panel's TE rate must be measured separately. */
+#define DAVINCI2_HOST_FPS 63
+static unsigned int davinci2_host_fps = DAVINCI2_HOST_FPS;
+module_param(davinci2_host_fps, uint, 0444);
+MODULE_PARM_DESC(davinci2_host_fps,
+		 "Davinci2 experimental host refresh request (60 or 63 Hz)");
+#endif
+
 struct dsim_device *dsim_drvdata[MAX_DSIM_CNT];
 EXPORT_SYMBOL(dsim_drvdata);
 
@@ -2053,6 +2062,21 @@ void parse_lcd_info(struct device_node *node, struct decon_lcd *lcd_info)
 	dsim_info("LCD size: width(%d), height(%d)\n", res[0], res[1]);
 
 	of_property_read_u32(node, "timing,refresh", &lcd_info->fps);
+#ifdef CONFIG_EXYNOS_COMMON_PANEL
+	if (!strcmp(node->name, "s6e3ha9_davinci") &&
+	    lcd_info->mode == DECON_MIPI_COMMAND_MODE &&
+	    lcd_info->xres == 1440 && lcd_info->yres == 3040 &&
+	    lcd_info->fps == 60) {
+		if (davinci2_host_fps == 60 || davinci2_host_fps == 63) {
+			lcd_info->fps = davinci2_host_fps;
+			dsim_info("Davinci2 host request: %u Hz; verify panel TE rate\n",
+				  lcd_info->fps);
+		} else {
+			dsim_warn("invalid Davinci2 host request %u; using stock 60 Hz\n",
+				  davinci2_host_fps);
+		}
+	}
+#endif
 	dsim_dbg("LCD refresh rate(%d)\n", lcd_info->fps);
 
 	of_property_read_u32_array(node, "timing,h-porch", res, 3);

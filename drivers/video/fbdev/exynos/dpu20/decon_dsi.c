@@ -22,6 +22,7 @@
 #include <linux/of_address.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/irq.h>
+#include <linux/math64.h>
 #include <drm/drm_edid.h>
 #include <media/v4l2-subdev.h>
 #if defined(CONFIG_EXYNOS_ALT_DVFS)
@@ -424,6 +425,36 @@ err:
 	return ret;
 }
 
+#define DECON_TE_WINDOW_INTERVALS 64
+#define DECON_TE_MIN_INTERVAL_NS (5 * NSEC_PER_MSEC)
+#define DECON_TE_MAX_INTERVAL_NS (50 * NSEC_PER_MSEC)
+#define DECON_TE_MAX_AGE_MS 250
+
+/* Called with decon->slock held; no clock or panel programming is performed. */
+static void decon_record_te(struct decon_vsync *vsync, u64 now_ns)
+{
+	u64 delta_ns = now_ns - vsync->te_last_ns;
+
+	if (vsync->te_last_ns && delta_ns >= DECON_TE_MIN_INTERVAL_NS &&
+	    delta_ns <= DECON_TE_MAX_INTERVAL_NS) {
+		vsync->te_sum_ns += delta_ns;
+		if (++vsync->te_count == DECON_TE_WINDOW_INTERVALS) {
+			vsync->te_period_ns = div_u64(vsync->te_sum_ns,
+						      vsync->te_count);
+			vsync->te_samples = vsync->te_count;
+			vsync->te_sum_ns = 0;
+			vsync->te_count = 0;
+		}
+	} else {
+		/* Discard startup, long IRQ gaps and short noise intervals. */
+		vsync->te_sum_ns = 0;
+		vsync->te_period_ns = 0;
+		vsync->te_count = 0;
+		vsync->te_samples = 0;
+	}
+	vsync->te_last_ns = now_ns;
+}
+
 static irqreturn_t decon_ext_irq_handler(int irq, void *dev_id)
 {
 	struct decon_device *decon = dev_id;
@@ -434,6 +465,8 @@ static irqreturn_t decon_ext_irq_handler(int irq, void *dev_id)
 	DPU_EVENT_LOG(DPU_EVT_TE_INTERRUPT, &decon->sd, timestamp);
 
 	spin_lock(&decon->slock);
+
+	decon_record_te(&decon->vsync, ktime_to_ns(timestamp));
 
 	if (decon->dt.trig_mode == DECON_SW_TRIG) {
 		decon_to_psr_info(decon, &psr);
@@ -521,6 +554,50 @@ static ssize_t decon_show_vsync(struct device *dev,
 }
 static DEVICE_ATTR(vsync, S_IRUGO, decon_show_vsync, NULL);
 
+static ssize_t display_timing_show(struct device *dev,
+				   struct device_attribute *attr, char *buf)
+{
+	struct decon_device *decon = dev_get_drvdata(dev);
+	unsigned long flags;
+	u64 last_ns, period_ns, millihz = 0;
+	s64 age_ms;
+	u32 samples, requested_hz;
+	bool normal_mode, valid;
+
+	if (!decon->lcd_info)
+		return -ENODEV;
+
+	spin_lock_irqsave(&decon->slock, flags);
+	last_ns = decon->vsync.te_last_ns;
+	period_ns = decon->vsync.te_period_ns;
+	samples = decon->vsync.te_samples;
+	if (decon->vsync.te_count >= DECON_TE_WINDOW_INTERVALS / 2) {
+		samples = decon->vsync.te_count;
+		period_ns = div_u64(decon->vsync.te_sum_ns, samples);
+	}
+	requested_hz = decon->lcd_info->fps;
+	normal_mode = decon->state == DECON_STATE_ON &&
+		decon->lcd_info->mode == DECON_MIPI_COMMAND_MODE;
+	spin_unlock_irqrestore(&decon->slock, flags);
+
+	age_ms = -1;
+	if (last_ns)
+		age_ms = div_u64(ktime_get_ns() - last_ns, NSEC_PER_MSEC);
+	valid = normal_mode && samples >= DECON_TE_WINDOW_INTERVALS / 2 &&
+		period_ns && age_ms >= 0 && age_ms <= DECON_TE_MAX_AGE_MS;
+	if (valid)
+		millihz = div_u64(1000000000000ULL, period_ns);
+	else
+		period_ns = 0;
+
+	return scnprintf(buf, PAGE_SIZE,
+			 "requested_hz=%u\nte_millihz=%llu\nte_period_ns=%llu\n"
+			 "te_samples=%u\nte_age_ms=%lld\nte_valid=%u\n",
+			 requested_hz, millihz, period_ns, samples,
+			 age_ms, valid);
+}
+static DEVICE_ATTR_RO(display_timing);
+
 static int decon_vsync_thread(void *data)
 {
 	struct decon_device *decon = data;
@@ -560,12 +637,19 @@ int decon_create_vsync_thread(struct decon_device *decon)
 		return ret;
 	}
 
+	ret = device_create_file(decon->dev, &dev_attr_display_timing);
+	if (ret) {
+		decon_err("failed to create display timing file\n");
+		goto err_vsync;
+	}
+
 	sprintf(name, "decon%d-vsync", decon->id);
 	decon->vsync.thread = kthread_run(decon_vsync_thread, decon, name);
 	if (IS_ERR_OR_NULL(decon->vsync.thread)) {
 		decon_err("failed to run vsync thread\n");
+		ret = decon->vsync.thread ?
+			PTR_ERR(decon->vsync.thread) : -ENOMEM;
 		decon->vsync.thread = NULL;
-		ret = PTR_ERR(decon->vsync.thread);
 		goto err;
 	}
 
@@ -573,6 +657,8 @@ int decon_create_vsync_thread(struct decon_device *decon)
 	return 0;
 
 err:
+	device_remove_file(decon->dev, &dev_attr_display_timing);
+err_vsync:
 	device_remove_file(decon->dev, &dev_attr_vsync);
 	return ret;
 }
@@ -623,6 +709,7 @@ void decon_get_edid(struct decon_device *decon, struct decon_edid_data *edid_dat
 
 void decon_destroy_vsync_thread(struct decon_device *decon)
 {
+	device_remove_file(decon->dev, &dev_attr_display_timing);
 	device_remove_file(decon->dev, &dev_attr_vsync);
 
 	if (decon->vsync.thread)
