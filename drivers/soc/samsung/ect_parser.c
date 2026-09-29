@@ -8,7 +8,10 @@
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/file.h>
+#include <linux/kobject.h>
+#include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/sysfs.h>
 #include <linux/vmalloc.h>
 
 #define ALIGNMENT_SIZE	 4
@@ -1203,8 +1206,6 @@ static int ect_dump_binary(struct seq_file *s, void *data);
 static int ect_dump_new_timing_parameter(struct seq_file *s, void *data);
 static int ect_dump_pidtm(struct seq_file *s, void *data);
 
-static int dump_open(struct inode *inode, struct file *file);
-
 #else
 
 #define ect_dump_header			NULL
@@ -1222,19 +1223,11 @@ static int dump_open(struct inode *inode, struct file *file);
 #define ect_dump_new_timing_parameter	NULL
 #define ect_dump_pidtm			NULL
 
-#define dump_open			NULL
-
 #endif
 
 static struct ect_info ect_header_info = {
 	.block_name = BLOCK_HEADER,
 	.dump = ect_dump_header,
-	.dump_ops = {
-		.open = dump_open,
-		.read = seq_read,
-		.llseek = seq_lseek,
-		.release = single_release,
-	},
 	.dump_node_name = SYSFS_NODE_HEADER,
 	.block_handle = NULL,
 	.block_precedence = -1,
@@ -1246,12 +1239,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_AP_THERMAL) - 1,
 		.parser = ect_parse_ap_thermal_header,
 		.dump = ect_dump_ap_thermal,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_AP_THERMAL,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1260,12 +1247,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_ASV) - 1,
 		.parser = ect_parse_voltage_header,
 		.dump = ect_dump_voltage,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_ASV,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1274,12 +1255,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_DVFS) - 1,
 		.parser = ect_parse_dvfs_header,
 		.dump = ect_dump_dvfs,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_DVFS,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1288,12 +1263,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_MARGIN) - 1,
 		.parser = ect_parse_margin_header,
 		.dump = ect_dump_margin,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_MARGIN,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1302,12 +1271,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_MIF_THERMAL) - 1,
 		.parser = ect_parse_mif_thermal_header,
 		.dump = ect_dump_mif_thermal,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_MIF_THERMAL,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1316,12 +1279,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_PLL) - 1,
 		.parser = ect_parse_pll_header,
 		.dump = ect_dump_pll,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_PLL,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1330,12 +1287,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_RCC) - 1,
 		.parser = ect_parse_rcc_header,
 		.dump = ect_dump_rcc,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_RCC,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1344,12 +1295,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_TIMING_PARAM) - 1,
 		.parser = ect_parse_timing_param_header,
 		.dump = ect_dump_timing_parameter,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_TIMING_PARAM,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1358,12 +1303,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_MINLOCK) - 1,
 		.parser = ect_parse_minlock_header,
 		.dump = ect_dump_minlock,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_MINLOCK,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1372,12 +1311,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_GEN_PARAM) - 1,
 		.parser = ect_parse_gen_param_header,
 		.dump = ect_dump_gen_parameter,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_GEN_PARAM,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1386,12 +1319,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_BIN) - 1,
 		.parser = ect_parse_bin_header,
 		.dump = ect_dump_binary,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release
-		},
 		.dump_node_name = SYSFS_NODE_BIN,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1400,12 +1327,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_NEW_TIMING_PARAM) - 1,
 		.parser = ect_parse_new_timing_param_header,
 		.dump = ect_dump_new_timing_parameter,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release,
-		},
 		.dump_node_name = SYSFS_NODE_NEW_TIMING_PARAM,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -1414,12 +1335,6 @@ static struct ect_info ect_list[] = {
 		.block_name_length = sizeof(BLOCK_PIDTM) - 1,
 		.parser = ect_parse_pidtm_header,
 		.dump = ect_dump_pidtm,
-		.dump_ops = {
-			.open = dump_open,
-			.read = seq_read,
-			.llseek = seq_lseek,
-			.release = single_release,
-		},
 		.dump_node_name = SYSFS_NODE_PIDTM,
 		.block_handle = NULL,
 		.block_precedence = -1,
@@ -2067,13 +1982,6 @@ static int ect_dump_pidtm(struct seq_file *s, void *data)
 	return 0;
 }
 
-static int dump_open(struct inode *inode, struct file *file)
-{
-	struct ect_info *info = (struct ect_info *)inode->i_private;
-
-	return single_open(file, info->dump, inode->i_private);
-}
-
 static int ect_dump_all(struct seq_file *s, void *data)
 {
 	int i, j, ret;
@@ -2096,17 +2004,69 @@ static int ect_dump_all(struct seq_file *s, void *data)
 	return 0;
 }
 
-static int dump_all_open(struct inode *inode, struct file *file)
+struct ect_dump_attribute {
+	struct bin_attribute bin_attr;
+	int (*dump)(struct seq_file *s, void *data);
+};
+
+static struct ect_dump_attribute ect_dump_files[ARRAY_SIZE(ect_list) + 2];
+
+static ssize_t ect_dump_read(struct file *file, struct kobject *kobj,
+		struct bin_attribute *attr, char *buf, loff_t pos, size_t count)
 {
-	return single_open(file, ect_dump_all, inode->i_private);
+	struct ect_dump_attribute *dump_attr =
+		container_of(attr, struct ect_dump_attribute, bin_attr);
+	struct seq_file seq = { };
+	size_t size = PAGE_SIZE;
+	int ret;
+
+	if (pos < 0)
+		return -EINVAL;
+
+	/* seq_file can grow beyond PAGE_SIZE; a regular sysfs show() cannot. */
+	for (;;) {
+		seq.buf = kvmalloc(size, GFP_KERNEL);
+		if (!seq.buf)
+			return -ENOMEM;
+		seq.size = size;
+		seq.count = 0;
+
+		ret = dump_attr->dump(&seq, NULL);
+		if (ret || !seq_has_overflowed(&seq))
+			break;
+
+		kvfree(seq.buf);
+		if (size > SIZE_MAX / 2)
+			return -EOVERFLOW;
+		size *= 2;
+	}
+
+	if (!ret) {
+		if (pos >= seq.count)
+			ret = 0;
+		else {
+			ret = min_t(size_t, count, seq.count - pos);
+			memcpy(buf, seq.buf + pos, ret);
+		}
+	}
+
+	kvfree(seq.buf);
+	return ret;
 }
 
-static struct file_operations ops_all_dump = {
-	.open = dump_all_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
+static int ect_add_dump_file(struct kobject *kobj, int index,
+		const char *name, int (*dump)(struct seq_file *, void *))
+{
+	struct ect_dump_attribute *entry = &ect_dump_files[index];
+
+	entry->dump = dump;
+	entry->bin_attr.attr.name = name;
+	entry->bin_attr.attr.mode = 0444;
+	entry->bin_attr.read = ect_dump_read;
+	sysfs_bin_attr_init(&entry->bin_attr);
+
+	return sysfs_create_bin_file(kobj, &entry->bin_attr);
+}
 
 static ssize_t create_binary_store(struct class *class,
 		struct class_attribute *attr, const char *buf, size_t size)
@@ -2153,47 +2113,54 @@ static CLASS_ATTR_WO(create_binary);
 
 static int ect_dump_init(void)
 {
-	int i;
-	struct dentry *root, *d;
+	struct kobject *root;
+	int i, count = 0, ret;
 
-	root = debugfs_create_dir("ect", NULL);
-	if (!root) {
-		pr_err("%s: couln't create debugfs\n", __FILE__);
-		return -ENOMEM;
-	}
-
-	d = debugfs_create_file("all_dump", S_IRUGO, root, NULL,
-				&ops_all_dump);
-	if (!d)
+	root = kobject_create_and_add("ect", kernel_kobj);
+	if (!root)
 		return -ENOMEM;
 
-	d = debugfs_create_file(ect_header_info.dump_node_name, S_IRUGO, root, &ect_header_info,
-				&ect_header_info.dump_ops);
-	if (!d)
-		return -ENOMEM;
+	ret = ect_add_dump_file(root, count, "all_dump", ect_dump_all);
+	if (ret)
+		goto err_files;
+	count++;
+
+	ret = ect_add_dump_file(root, count,
+			ect_header_info.dump_node_name, ect_header_info.dump);
+	if (ret)
+		goto err_files;
+	count++;
 
 	for (i = 0; i < ARRAY_SIZE32(ect_list); ++i) {
 		if (ect_list[i].block_handle == NULL)
 			continue;
 
-		d = debugfs_create_file(ect_list[i].dump_node_name, S_IRUGO, root, &(ect_list[i]),
-					&ect_list[i].dump_ops);
-		if (!d)
-			return -ENOMEM;
+		ret = ect_add_dump_file(root, count,
+				ect_list[i].dump_node_name, ect_list[i].dump);
+		if (ret)
+			goto err_files;
+		count++;
 	}
 
 	ect_class = class_create(THIS_MODULE, "ect");
 	if (IS_ERR(ect_class)) {
-		pr_err("%s: couldn't create class\n", __FILE__);
-		return PTR_ERR(ect_class);
+		ret = PTR_ERR(ect_class);
+		goto err_files;
 	}
 
-	if (class_create_file(ect_class, &class_attr_create_binary)) {
-		pr_err("%s: couldn't create generate_data node\n", __FILE__);
-		return -EINVAL;
+	ret = class_create_file(ect_class, &class_attr_create_binary);
+	if (ret) {
+		class_destroy(ect_class);
+		goto err_files;
 	}
 
 	return 0;
+
+err_files:
+	while (--count >= 0)
+		sysfs_remove_bin_file(root, &ect_dump_files[count].bin_attr);
+	kobject_put(root);
+	return ret;
 }
 late_initcall_sync(ect_dump_init);
 #endif

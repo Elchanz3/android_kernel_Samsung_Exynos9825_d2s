@@ -20,7 +20,7 @@
 #include <linux/module.h>
 #include <linux/stat.h>
 #include <linux/fs.h>
-#include <linux/debugfs.h>
+#include <linux/seq_file.h>
 
 #define BLOCK_HEADER		"HEADER"
 
@@ -401,7 +401,6 @@ struct ect_info
 	int block_name_length;
 	int (*parser)(void *address, struct ect_info *info);
 	int (*dump)(struct seq_file *s, void *data);
-	struct file_operations dump_ops;
 	char *dump_node_name;
 	void *block_handle;
 	int block_precedence;
